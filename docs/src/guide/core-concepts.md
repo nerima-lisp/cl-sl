@@ -2,10 +2,10 @@
 
 ## Train and world
 
-A [`train`](reference/api.md) tracks its own horizontal position, velocity,
+A [`train`](../reference/api.md) tracks its own horizontal position, velocity,
 current animation frame, and (while `-a`/`--accident` is active) whether it
 is paused mid-collision with the accident sprite. A
-[`world`](reference/api.md) wraps the one train in a run together with the
+[`world`](../reference/api.md) wraps the one train in a run together with the
 screen dimensions and the quit flag.
 
 `world-advance` is the single pure per-tick transition: it moves the train
