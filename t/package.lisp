@@ -4,7 +4,7 @@
   ;; DESCRIBE clashes with CL:DESCRIBE, so shadow-import cl-weave's.
   (:shadowing-import-from #:cl-weave #:describe)
   (:import-from #:cl-weave
-                #:it #:it-each #:expect #:signals #:run-all #:with-soft-assertions
+                #:it #:it-each #:expect #:run-all #:with-soft-assertions
                 #:it-fuzz #:gen-integer)
   ;; Test-only cl-tty-kit primitives. CL-SL imports all of these into its own
   ;; package already (src/package.lisp) but does not re-export them as part

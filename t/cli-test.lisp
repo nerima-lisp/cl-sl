@@ -53,12 +53,12 @@
               :to-be-truthy)))
 
   (it "rejects a --fps below the 1 minimum"
-    (expect (signals (parse-argv (make-sl-app) '("cl-sl" "--fps" "0")) 'cli-invalid-option-value)
-            :to-be-truthy))
+    (expect (lambda () (parse-argv (make-sl-app) '("cl-sl" "--fps" "0")))
+            :to-throw 'cli-invalid-option-value))
 
   (it "rejects a --fps above the 60 maximum"
-    (expect (signals (parse-argv (make-sl-app) '("cl-sl" "--fps" "61")) 'cli-invalid-option-value)
-            :to-be-truthy)))
+    (expect (lambda () (parse-argv (make-sl-app) '("cl-sl" "--fps" "61")))
+            :to-throw 'cli-invalid-option-value)))
 
 (describe "the cl-sl app spec: --help and --version"
   (it "exits 0 on --help without invoking the run handler"
