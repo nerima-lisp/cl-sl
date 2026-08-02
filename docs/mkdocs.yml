@@ -1,0 +1,56 @@
+site_name: cl-sl
+site_description: An original ASCII-art steam locomotive that runs across the terminal.
+site_url: https://nerima-lisp.github.io/cl-sl/
+repo_url: https://github.com/nerima-lisp/cl-sl
+repo_name: nerima-lisp/cl-sl
+edit_uri: edit/main/docs/src/
+
+docs_dir: src
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guide:
+      - Core concepts: guide/core-concepts.md
+  - Reference:
+      - API: reference/api.md
+      - Architecture: reference/architecture.md
+      - Conditions: reference/conditions.md
+  - Project:
+      - Roadmap: project/roadmap.md
+
+not_in_nav: |
+  notes/
