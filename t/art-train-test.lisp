@@ -22,3 +22,8 @@
   (it "shares one (width, height) between the standing and splat frames"
     (multiple-value-bind (person-width person-height) (cl-sl::sprite-dimensions (cl-sl::person-art))
       (expect (cl-sl::splat-art) :to-have-dimensions person-width person-height))))
+
+(describe "%define-train-variant"
+  (it "signals an error at macroexpansion time for a variant not in +train-variants+"
+    (expect (lambda () (macroexpand-1 '(cl-sl::%define-train-variant :bogus "doc" ("x"))))
+            :to-throw 'error)))

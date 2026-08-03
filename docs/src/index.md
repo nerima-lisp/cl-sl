@@ -12,3 +12,10 @@ train art.
 
 See [Getting started](getting-started.md) to run it, or the
 [API reference](reference/api.md) to use it as a library.
+
+- [Core concepts](guide/core-concepts.md) -- the train/world split and how a
+  tick advances.
+- [Architecture](reference/architecture.md) -- the source tree and the
+  pure-logic/real-I/O boundary.
+- [Development](project/development.md) -- building, testing, and
+  contributing.

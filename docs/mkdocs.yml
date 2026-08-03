@@ -51,6 +51,7 @@ nav:
       - Conditions: reference/conditions.md
   - Project:
       - Roadmap: project/roadmap.md
+      - Development: project/development.md
 
 not_in_nav: |
   notes/
