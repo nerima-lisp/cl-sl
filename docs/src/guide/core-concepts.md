@@ -34,5 +34,21 @@ at most once per run.
 Everything above is pure: no raw mode, no `cl-tty-kit` screen, no reading the
 wall clock. `src/app.lisp` is the one file that takes over the real
 terminal, feeding `world-advance` into `cl-tty-kit:tick-loop-run-realtime`
-and rendering each frame -- mirroring the split
-[cl-asciiquarium](https://github.com/nerima-lisp/cl-asciiquarium) uses.
+and rendering each frame -- the one place this library's continuations run
+against the real terminal instead of a fixed tick count in a test.
+
+This is also where continuation-passing style genuinely belongs in this
+codebase: `run` never calls the poll/advance/render/quit steps itself, it
+hands `tick-loop-run-realtime` four callbacks -- `:poll` (`%make-poll`,
+composed from `cl-tty-kit:make-terminal-size-poller` and
+`cl-tty-kit:make-stream-input-poller` directly, no local reimplementation),
+`#'world-advance`, a render closure, and `#'world-quitp` -- and lets the loop
+call them back each tick in that order, threading `:poll`'s return value into
+`world-advance` as the tick's starting state. `world-advance`, `train-advance`,
+and `apply-collision`, by contrast, stay in ordinary direct style -- each is
+a short, total, straight-line transition over an in-memory struct with
+nothing to suspend or resume around, so threading an explicit continuation
+through them would add a parameter and an indirection to every call site
+without removing anything; CPS earns its keep at a real control-flow
+boundary like the tick loop, not inside code that has no need to describe
+"what happens next" beyond returning.

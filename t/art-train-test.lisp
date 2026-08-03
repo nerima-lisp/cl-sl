@@ -21,7 +21,4 @@
 (describe "the accident person/splat frame pair"
   (it "shares one (width, height) between the standing and splat frames"
     (multiple-value-bind (person-width person-height) (cl-sl::sprite-dimensions (cl-sl::person-art))
-      (multiple-value-bind (splat-width splat-height) (cl-sl::sprite-dimensions (cl-sl::splat-art))
-        (with-soft-assertions
-          (expect (= person-width splat-width) :to-be-truthy)
-          (expect (= person-height splat-height) :to-be-truthy))))))
+      (expect (cl-sl::splat-art) :to-have-dimensions person-width person-height))))

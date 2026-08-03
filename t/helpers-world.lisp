@@ -8,3 +8,11 @@
 train's position after a handful of ticks is easy to predict by hand."
   (make-world :width width :height height
               :accident-p accident-p :little-p little-p :fly-p fly-p :speed speed))
+
+(defvar *world* nil
+  "Scratch WORLD a describe block's BEFORE-EACH fixture rebinds fresh for
+every IT within it, instead of each IT constructing its own via TINY-WORLD.")
+
+(defvar *train* nil
+  "Scratch TRAIN a describe block's BEFORE-EACH fixture rebinds fresh for
+every IT within it, usually to (WORLD-TRAIN *WORLD*).")

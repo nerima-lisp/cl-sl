@@ -1,33 +1,41 @@
 ;;;; src/cli.lisp -- the `cl-sl` command line: a single root command (no
 ;;;; subcommands) that takes over the terminal in raw mode via a realtime
-;;;; tick loop -- the same shape as cl-asciiquarium's CLI (a persistent,
-;;;; full-screen loop until the train exits or `q' is pressed) rather than
-;;;; cl-cowsay's one-shot print. t/cli-test.lisp therefore never invokes it
-;;;; (never RUN-APP without --help/--version); see cl-asciiquarium/t/cli-test.lisp,
-;;;; which gives the same reasoning.
+;;;; tick loop until the train exits or `q' is pressed. t/cli-test.lisp
+;;;; therefore never invokes it (never RUN-APP without --help/--version): a
+;;;; loop that only returns on its own schedule has no way to hand control
+;;;; back to a test runner.
 (in-package #:cl-sl/cli)
 
 (defun %sl-version ()
   "The running CL-SL system's :VERSION, the single source of truth also read
-by flake.nix and enforced by release.yml against the git tag -- the same
-asdf:component-version pattern cl-cowsay/src/cli.lisp and
-cl-asciiquarium/src/cli.lisp use, so this CLI's --version output cannot drift
-from a version bump in cl-sl.asd the way a literal copy could."
+by flake.nix and enforced by release.yml against the git tag, so this CLI's
+--version output cannot drift from a version bump in cl-sl.asd the way a
+literal copy could."
   (let ((system (asdf:find-system "cl-sl" nil)))
     (if system (asdf:component-version system) "0.0.0")))
 
+(defun %resolve-run-args (invocation detected-columns detected-rows)
+  "Return a plist of RUN's keyword arguments, resolved from INVOCATION's
+parsed CL-CLI options and a terminal size already queried by %RUN-HANDLER via
+TERMINAL-SIZE: WIDTH/HEIGHT fall back to +DEFAULT-WIDTH+/+DEFAULT-HEIGHT+
+when DETECTED-COLUMNS/DETECTED-ROWS is NIL (terminal size unavailable), and
+FPS falls back to 20 when --fps was not given. Pure -- no terminal I/O of its
+own -- so it is tested directly in t/cli-test.lisp, unlike %RUN-HANDLER
+itself, which calls RUN and takes over the real terminal."
+  (list :width (or detected-columns +default-width+)
+        :height (or detected-rows +default-height+)
+        :accident-p (option-value invocation :accident)
+        :little-p (option-value invocation :little)
+        :fly-p (option-value invocation :fly)
+        :fps (or (option-value invocation :fps) 20)))
+
 (defun %run-handler (invocation)
   "The handler cl-cli:RUN-APP dispatches to: resolve --width/--height against
-the detected terminal size, then run the locomotive. Returns 0 once RUN
-returns (i.e. once the train has fully crossed the screen, or `q' is
-pressed)."
+the detected terminal size (see %RESOLVE-RUN-ARGS), then run the locomotive.
+Returns 0 once RUN returns (i.e. once the train has fully crossed the
+screen, or `q' is pressed)."
   (multiple-value-bind (detected-columns detected-rows) (terminal-size)
-    (run :width (or detected-columns +default-width+)
-         :height (or detected-rows +default-height+)
-         :accident-p (option-value invocation :accident)
-         :little-p (option-value invocation :little)
-         :fly-p (option-value invocation :fly)
-         :fps (or (option-value invocation :fps) 20)))
+    (apply #'run (%resolve-run-args invocation detected-columns detected-rows)))
   0)
 
 (defun make-sl-app ()
@@ -64,7 +72,7 @@ process argv against MAKE-SL-APP and exit with its result code."
 cl-sl.asd. A dumped image comes back with the state it was dumped with, which
 for a packaged build is a build sandbox that no longer exists; this puts the
 process back in touch with the machine it is actually running on before the
-CLI sees an argument -- the same fix cl-cowsay/src/cli.lisp applies."
+CLI sees an argument."
   (setf *default-pathname-defaults* (uiop:getcwd))
   (uiop:setup-temporary-directory)
   (main))

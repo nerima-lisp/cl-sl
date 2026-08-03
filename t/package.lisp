@@ -5,7 +5,9 @@
   (:shadowing-import-from #:cl-weave #:describe)
   (:import-from #:cl-weave
                 #:it #:it-each #:expect #:run-all #:with-soft-assertions
-                #:it-fuzz #:gen-integer)
+                #:it-fuzz #:gen-integer #:gen-member #:gen-boolean
+                #:defmatcher #:before-each #:after-each
+                #:run-mutations #:assert-mutation-score)
   ;; Test-only cl-tty-kit primitives. CL-SL imports all of these into its own
   ;; package already (src/package.lisp) but does not re-export them as part
   ;; of its own public API -- an application does not need to forward its
@@ -13,13 +15,16 @@
   ;; directly (rather than only through DRAW-WORLD/RENDER-FRAME), or that
   ;; build KEY-EVENTs from a plain string, import them here instead.
   ;; DECODE-INPUT (a one-shot decoder) is the simplest way for a test to drive
-  ;; WORLD-APPLY-KEY-EVENT without composing raw escape sequences; the shipped
-  ;; application only needs the incremental DECODE-INPUT-CHUNK (src/app.lisp).
+  ;; WORLD-APPLY-KEY-EVENT without composing raw escape sequences.
+  ;; RENDERER-WIDTH/RENDERER-HEIGHT let t/app-test.lisp assert %APPLY-RESIZE
+  ;; actually resized the renderer, not only the world.
   (:import-from #:cl-tty-kit
                 #:decode-input
                 #:make-screen #:make-renderer
+                #:renderer-width #:renderer-height
                 #:tick-loop-run
-                #:cell-char #:screen-cell)
+                #:cell-char #:screen-cell
+                #:key-event-type #:key-event-code)
   ;; Test-only cl-sl/cli and cl-cli primitives for t/cli-test.lisp. CL-SL/CLI
   ;; is a separate package from CL-SL by design (src/package.lisp), so its
   ;; MAKE-SL-APP is imported here rather than re-exported from CL-SL.

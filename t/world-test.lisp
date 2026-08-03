@@ -39,12 +39,17 @@
         (unless (world-quitp world) (world-advance world)))
       (expect (world-quitp world) :to-be-truthy)
       (expect (train-exited-p (world-train world) world) :to-be-truthy)))
-  (it-fuzz "never signals an error across many random world sizes and speeds"
+  (it-fuzz "never signals an error across many random world sizes, variants, and speeds"
       ((width (gen-integer :min 5 :max 200))
        (height (gen-integer :min 3 :max 60))
-       (ticks (gen-integer :min 1 :max 80)))
-      (:trials 30 :timeout-per-trial 2)
-    (let ((world (make-world :width width :height height :speed -2.0)))
+       (ticks (gen-integer :min 1 :max 80))
+       (variant (gen-member +train-variants+))
+       (accident-p (gen-boolean))
+       (speed (gen-integer :min -6 :max -1)))
+      (:trials 40 :timeout-per-trial 2)
+    (let ((world (make-world :width width :height height
+                              :little-p (eq variant :little) :fly-p (eq variant :fly)
+                              :accident-p accident-p :speed speed)))
       (dotimes (i ticks) (world-advance world)))))
 
 (describe "an accident (-a) run, deterministically"

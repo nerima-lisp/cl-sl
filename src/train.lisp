@@ -80,7 +80,7 @@ variant runs along the baseline unconditionally."
 (defun train-exited-p (train world)
   "True once TRAIN has scrolled fully off WORLD's left edge: its right edge
 (X + WIDTH) has crossed column 0."
-  (< (+ (train-x train) (train-width train)) 0))
+  (minusp (+ (train-x train) (train-width train))))
 
 (defun %train-tick-animation (train)
   "Advance TRAIN's smoke/wheel animation by one tick, looping FRAME-INDEX

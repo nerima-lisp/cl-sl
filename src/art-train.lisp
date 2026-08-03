@@ -1,15 +1,16 @@
-;;;; src/art-train.lisp -- original steam-locomotive ASCII art and the frame
-;;;; tables for each variant.
+;;;; src/art-train.lisp -- the frame-table engine shared by every train
+;;;; variant: normalizing raw multi-line sprite text into a dimension-
+;;;; consistent frame vector, and %DEFINE-TRAIN-VARIANT, the macro that runs a
+;;;; variant's raw art (src/art-train-data.lisp) through that normalization
+;;;; and registers the result into *TRAIN-VARIANT-FRAMES* for %TRAIN-FRAMES to
+;;;; look up.
 ;;;;
-;;;; Every sprite below is original, hand-authored for this repository -- none
-;;;; of it is copied or transcribed from the classic Unix `sl.c` train art.
-;;;; Each variant is a short list of animation frames (smoke drifting, wheels
-;;;; spinning) that differ only in a handful of glyphs; %NORMALIZE-FRAME-GROUP
-;;;; pads every frame in a group to the group's own maximum width and height,
-;;;; so a hand-authored length mismatch between two frames of the same
-;;;; animation cannot show up as the sprite changing size mid-motion --
-;;;; TRAIN-ADVANCE (train.lisp) relies on every frame of a given variant
-;;;; reporting identical dimensions.
+;;;; This file is pure mechanism -- no sprite art lives here; see
+;;;; art-train-data.lisp for that. NORMALIZE-FRAME-GROUP pads every frame in a
+;;;; group to the group's own maximum width and height, so a hand-authored
+;;;; length mismatch between two frames of the same animation cannot show up
+;;;; as the sprite changing size mid-motion -- TRAIN-ADVANCE (train.lisp)
+;;;; relies on every frame of a given variant reporting identical dimensions.
 (in-package #:cl-sl)
 
 (defun %frame-lines (text)
@@ -59,9 +60,23 @@ column alignment."
              line-lists)
      'simple-vector)))
 
-(defparameter +train-variants+ '(:normal :little :fly)
-  "The recognized TRAIN-VARIANT keywords; every other value MAKE-TRAIN sees
-signals UNKNOWN-VARIANT.")
+;;; +TRAIN-VARIANTS+ must be bound while %DEFINE-TRAIN-VARIANT expands the
+;;; forms below it, not only once this file's fasl is later loaded -- a plain
+;;; DEFPARAMETER's value is a load-time effect under COMPILE-FILE, invisible
+;;; to macroexpansion happening later in the very same compilation. Wrapping
+;;; it in EVAL-WHEN makes the value a compile-time effect too, so the
+;;; membership check inside the macro below sees real data instead of an
+;;; unbound variable.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter +train-variants+ '(:normal :little :fly)
+    "The recognized TRAIN-VARIANT keywords; every other value MAKE-TRAIN sees
+signals UNKNOWN-VARIANT."))
+
+(defvar *train-variant-frames* (make-hash-table :test #'eq)
+  "Maps each keyword in +TRAIN-VARIANTS+ to its frame-table SIMPLE-VECTOR.
+Populated by %DEFINE-TRAIN-VARIANT below; %TRAIN-FRAMES reads it instead of a
+hand-written CASE, so a variant declared here cannot silently go missing from
+dispatch the way a forgotten CASE clause could.")
 
 (defun %join-lines (&rest lines)
   "Join LINES with #\\Newline between them. Each line is a complete string
@@ -74,91 +89,27 @@ cannot catch, since collapsed leading spaces still produce a rectangular,
 self-consistent frame."
   (format nil "~{~A~^~%~}" lines))
 
-;;; :NORMAL -- a full-size locomotive pulling two cargo cars. Three frames:
-;;; the smokestack's puff drifts left-to-right-to-left while the wheels
-;;; alternate between two spoke glyphs, giving a simple chugging motion.
-(defparameter +train-frames-normal+
-  (normalize-frame-group
-   (list
-    (%join-lines "      .  o"
-                 "     (    )"
-                 ".----'----'-----.____.--------.____.--------."
-                 "|    SL LOCO    |    |  CARGO |    |  CARGO |"
-                 "|________________|    |________|    |________|"
-                 "'--(o)------(o)--'----(o)------'----(o)------'")
-    (%join-lines "    o    ."
-                 "   (      )"
-                 ".----'----'-----.____.--------.____.--------."
-                 "|    SL LOCO    |    |  CARGO |    |  CARGO |"
-                 "|________________|    |________|    |________|"
-                 "'--(0)------(0)--'----(0)------'----(0)------'")
-    (%join-lines "        o  ."
-                 "       (    )"
-                 ".----'----'-----.____.--------.____.--------."
-                 "|    SL LOCO    |    |  CARGO |    |  CARGO |"
-                 "|________________|    |________|    |________|"
-                 "'--(o)------(o)--'----(o)------'----(o)------'")))
-  "Frame table for the :NORMAL train variant. Original art.")
-
-;;; :LITTLE -- a short train: the same locomotive cab pulling a single log
-;;; car instead of standard cargo. Two frames.
-(defparameter +train-frames-little+
-  (normalize-frame-group
-   (list
-    (%join-lines "   o"
-                 "  ( )"
-                 ".-'-'--.___.==-==-==."
-                 "|LOCO SL|   |  LOGS  |"
-                 "'-(o)(o)-'---(o)--(o)-'")
-    (%join-lines " o"
-                 "( )"
-                 ".-'-'--.___.==-==-==."
-                 "|LOCO SL|   |  LOGS  |"
-                 "'-(0)(0)-'---(0)--(0)-'")))
-  "Frame table for the :LITTLE train variant. Original art.")
-
-;;; :FLY -- the locomotive with a pair of wings bolted to its sides, for the
-;;; -F/--fly variant whose Y position oscillates across the screen instead of
-;;; running along the bottom row (see +FLY-Y-OFFSETS+ in train.lisp).
-(defparameter +train-frames-fly+
-  (normalize-frame-group
-   (list
-    (%join-lines "   o    \\###/"
-                 "  ( )    |  |"
-                 ".-'-'-----.___.--------."
-                 "| SL LOCO |   | CARGO  |"
-                 "'--(o)----'---(o)--(o)-'")
-    (%join-lines " o      /###\\"
-                 "( )      |  |"
-                 ".-'-'-----.___.--------."
-                 "| SL LOCO |   | CARGO  |"
-                 "'--(0)----'---(0)--(0)-'")))
-  "Frame table for the :FLY train variant. Original art.")
+(defmacro %define-train-variant (variant documentation &body frames)
+  "Define +TRAIN-FRAMES-<VARIANT>+ from FRAMES (each a list of line-string
+forms, one element per animation frame, passed to %JOIN-LINES) via
+NORMALIZE-FRAME-GROUP, and register the result into *TRAIN-VARIANT-FRAMES*
+under VARIANT for %TRAIN-FRAMES to look up. VARIANT must already be a member
+of +TRAIN-VARIANTS+ -- checked here, at macroexpansion time, so a typo'd or
+not-yet-declared variant is a compile error pointing at this form, rather
+than a run-time UNKNOWN-VARIANT pointing at whichever caller first hit the
+gap."
+  (unless (member variant +train-variants+)
+    (error "%DEFINE-TRAIN-VARIANT: ~S is not a member of +TRAIN-VARIANTS+." variant))
+  (let ((frames-name (intern (format nil "+TRAIN-FRAMES-~A+" (symbol-name variant)))))
+    `(progn
+       (defparameter ,frames-name
+         (normalize-frame-group (list ,@(mapcar (lambda (frame) `(%join-lines ,@frame)) frames)))
+         ,documentation)
+       (setf (gethash ,variant *train-variant-frames*) ,frames-name)
+       ',frames-name)))
 
 (defun %train-frames (variant)
   "Return the frame vector for TRAIN-VARIANT, signaling UNKNOWN-VARIANT for
 anything not in +TRAIN-VARIANTS+."
-  (case variant
-    (:normal +train-frames-normal+)
-    (:little +train-frames-little+)
-    (:fly +train-frames-fly+)
-    (t (error 'unknown-variant :name variant))))
-
-;;; The accident sprite (-a/--accident): a small original "person" standing in
-;;; the train's path, and the brief splat frame shown once the train reaches
-;;; them. Normalized together as a pair so the splat can be drawn in the
-;;; person's place without the bounding box changing shape.
-(defparameter +person-splat-frames+
-  (normalize-frame-group
-   (list
-    (%join-lines " o"
-                 "/|\\"
-                 "/ \\")
-    (%join-lines "\\*/"
-                 "**"
-                 "/*\\")))
-  "A two-element vector: element 0 is the standing person's art, element 1 is
-the splat frame shown once the train reaches them. Original art.")
-
-(defun person-art () (aref +person-splat-frames+ 0))
-(defun splat-art () (aref +person-splat-frames+ 1))
+  (or (gethash variant *train-variant-frames*)
+      (error 'unknown-variant :name variant)))

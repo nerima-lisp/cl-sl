@@ -3,9 +3,10 @@
 ;;;; Two packages, per PACKAGE_STANDARD.md: CL-SL is the pure rendering/
 ;;;; simulation library (train/world state, the advance function, art data,
 ;;;; and the real-terminal run loop) and CL-SL/CLI is the thin command-line
-;;;; front end over it, exactly the split cl-cowsay's src/package.lisp uses.
-;;;; Splitting them keeps `(asdf:load-system "cl-sl")` usable as a library
-;;;; with no CL-CLI-flavoured argv parsing along for the ride.
+;;;; front end over it. Splitting them keeps `(asdf:load-system "cl-sl")`
+;;;; usable as a library with no CL-CLI-flavoured argv parsing along for the
+;;;; ride -- an embedder that wants the locomotive without a CLI never
+;;;; transitively pulls in cl-cli at all.
 ;;;;
 ;;;; CODING_STANDARD.md requires `:use` to name only #:cl and every sibling
 ;;;; package to come in through `:import-from`, so the outsize import list
@@ -21,6 +22,7 @@
                 #:screen-width
                 #:screen-height
                 #:screen-clear
+                #:with-screen-batch
                 #:sprite-blit
                 #:make-style
                 #:style-fg
@@ -35,8 +37,8 @@
                 #:with-raw-mode
                 #:with-terminal-session
                 #:terminal-size
-                #:make-input-decoder
-                #:decode-input-chunk
+                #:make-stream-input-poller
+                #:make-terminal-size-poller
                 #:key-event-type
                 #:key-event-code)
   (:export

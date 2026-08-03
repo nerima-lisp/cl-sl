@@ -10,7 +10,7 @@
     # this repository's entire required-output table, so none of it is
     # spelled out here and none of it can drift from the other repositories.
     cl-nix-forge = {
-      url = "github:nerima-lisp/cl-nix-forge/v0.4.0";
+      url = "github:nerima-lisp/cl-nix-forge/v0.4.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -21,7 +21,7 @@
     # `lispDerivation` below), never these repos' own flake outputs -- see
     # DEPENDENCY_POLICY.md "姉妹パッケージは flake = false で引きます".
     cl-tty-kit = {
-      url = "github:nerima-lisp/cl-tty-kit/v1.3.0";
+      url = "github:nerima-lisp/cl-tty-kit/v1.4.0";
       flake = false;
     };
 
@@ -55,8 +55,17 @@
     # Unlike the sibling *packages* above, this is consumed for its `lib`
     # output (`mkLintCheck`), which a `flake = false` source tree cannot
     # provide -- the same reason cl-cli keeps it a real flake input.
+    #
+    # Pinned to v1.3.0, NOT the newer v1.4.0: v1.4.0's own `lib` output only
+    # covers `x86_64-linux` (verified via `nix eval
+    # github:nerima-lisp/paredit-cli/v1.4.0#lib --apply builtins.attrNames`),
+    # which breaks `checks.aarch64-darwin.paredit-lint` outright on this
+    # repository's own declared development system (`systems` below). v1.3.0
+    # is the newest release that still publishes `lib` for all four systems
+    # cl-nix-forge's preset expects. Re-pin to v1.4.0 (or newer) once upstream
+    # restores that coverage.
     paredit-cli = {
-      url = "github:nerima-lisp/paredit-cli/v1.4.0";
+      url = "github:nerima-lisp/paredit-cli/v1.3.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -203,8 +212,32 @@
           # store path whose cover-index.html is the report to open. No
           # minimum-coverage threshold -- see cl-nix-forge's
           # lib/batteries/coverage.nix for why one would gate on the wrong
-          # thing here (sb-cover's raw expression percentage under-attributes
-          # top-level defstruct/define-condition forms by design).
+          # thing here. Verified by hand against this repository specifically
+          # (not merely assumed), line by line in the generated report:
+          #
+          # - art-train-data.lisp's raw expression score is misleadingly low
+          #   because sb-cover under-attributes the string literals inside a
+          #   %DEFINE-TRAIN-VARIANT/DEFPARAMETER data form, even though every
+          #   variant IS exercised (t/art-train-test.lisp asserts on each
+          #   one's resulting dimensions).
+          # - app.lisp's real-IO surface is deliberately split as narrowly as
+          #   cl-tty-kit's own WITH-RAW-MODE allows: %RUN-LOOP holds the
+          #   entire poll/advance/render/quit TICK-LOOP-RUN-REALTIME
+          #   composition and is fully exercised in t/app-test.lisp against a
+          #   STRING-OUTPUT-STREAM/STRING-INPUT-STREAM pair, no real terminal
+          #   needed. Only RUN's own body -- constructing WORLD/RENDERER and
+          #   the WITH-RAW-MODE/WITH-TERMINAL-SESSION wrapper around
+          #   %RUN-LOOP -- is untested, because WITH-RAW-MODE's body does not
+          #   even run when FD 0 is not a real controlling terminal (see its
+          #   docstring: "when supported"), so unit-testing it would mean
+          #   either a fake pty (testing a mock, not RUN) or a flaky
+          #   dependency on CI granting a real tty.
+          # - cli.lisp is the same story one layer up: %RESOLVE-RUN-ARGS (all
+          #   of %RUN-HANDLER's actual logic) is fully tested; only
+          #   %RUN-HANDLER's call into RUN, MAIN, and IMAGE-ENTRY-POINT
+          #   remain untested, for the same reason plus MAIN/IMAGE-ENTRY-
+          #   POINT being process-exit code (UIOP:QUIT) a test process cannot
+          #   call into without terminating itself.
           coverage = ctx.cl.mkCoverageReport {
             drv = ctx.package;
             systems = [ "cl-sl" ];

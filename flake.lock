@@ -59,16 +59,16 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1785347314,
-        "narHash": "sha256-eSnOllc5L+DuP5TrPGPQUzMzfN8HA88x326EzZvo7V4=",
+        "lastModified": 1785654861,
+        "narHash": "sha256-f9qqtyUPlljTfnI5UbyGo37QxdQwomAOK3KRoNDwYd4=",
         "owner": "nerima-lisp",
         "repo": "cl-nix-forge",
-        "rev": "53f26644d8cc40f5e677cedb00dd10ca5726d25a",
+        "rev": "1ed4292da73f0d7a0a909376d983475cb41a75b9",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v0.4.0",
+        "ref": "v0.4.1",
         "repo": "cl-nix-forge",
         "type": "github"
       }
@@ -76,16 +76,16 @@
     "cl-tty-kit": {
       "flake": false,
       "locked": {
-        "lastModified": 1785673205,
-        "narHash": "sha256-vGdle1cAXppHvQK0ZcDt2Od+nav3zTaUnjRSnsz1+k4=",
+        "lastModified": 1785761479,
+        "narHash": "sha256-n1EQ6pTS67gUWPUEGa/yFmnpnaWKrDLEu2vY9wlHIjE=",
         "owner": "nerima-lisp",
         "repo": "cl-tty-kit",
-        "rev": "2541743c8af29cfdaba20ff1b91e70f612dfcd3a",
+        "rev": "4f31fade9b94b94ec835097807b3ea0e2755de91",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.3.0",
+        "ref": "v1.4.0",
         "repo": "cl-tty-kit",
         "type": "github"
       }
@@ -148,16 +148,16 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1785644478,
-        "narHash": "sha256-kqu9BDf8JqVe+Qo08ahOOuqpbqSto5RlQRhHoKw40d8=",
+        "lastModified": 1785386902,
+        "narHash": "sha256-UD8Nws8wpybWfqSUfuGykQHr2PldEU3ALFbHMVPQn8U=",
         "owner": "nerima-lisp",
         "repo": "paredit-cli",
-        "rev": "9f8db23ddd496ef6773e040454832eeafc60aeea",
+        "rev": "f646e5549049e33260b5f3f02587056870656b86",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.4.0",
+        "ref": "v1.3.0",
         "repo": "paredit-cli",
         "type": "github"
       }

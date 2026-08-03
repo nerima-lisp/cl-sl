@@ -1,11 +1,13 @@
 ;;;; t/cli-test.lisp
 ;;;;
-;;;; Flag parsing only: the handler calls RUN (src/app.lisp), which takes
-;;;; over a real terminal in raw mode via a realtime tick loop -- the same
-;;;; shape as cl-asciiquarium's CLI (a persistent, full-screen loop) rather
-;;;; than cl-cowsay's one-shot print -- so these tests never invoke it (never
-;;;; RUN-APP without --help or --version); see cl-asciiquarium/t/cli-test.lisp,
-;;;; which gives the same reasoning.
+;;;; Flag parsing, plus %RESOLVE-RUN-ARGS (the pure width/height/fps
+;;;; resolution %RUN-HANDLER performs before calling RUN). %RUN-HANDLER and
+;;;; RUN itself are not tested here: RUN (src/app.lisp) takes over a real
+;;;; terminal in raw mode via a realtime tick loop that only returns once the
+;;;; train exits or `q' is pressed -- unlike a one-shot print command, there
+;;;; is no way to invoke it under a test runner and get control back, so
+;;;; these tests never call RUN-APP without --help or --version, which
+;;;; return before the handler runs.
 (in-package #:cl-sl/test)
 
 (describe "the cl-sl app spec: flag parsing round-trips"
@@ -72,3 +74,32 @@
                     (expect (= (run-app (make-sl-app) :argv '("cl-sl" "--version") :stdout out) 0)
                             :to-be-truthy))))
       (expect (search "cl-sl" output) :to-be-truthy))))
+
+(describe "%resolve-run-args"
+  (it "uses the detected terminal size when both dimensions are available"
+    (let ((args (cl-sl/cli::%resolve-run-args (parse-argv (make-sl-app) '("cl-sl")) 120 40)))
+      (with-soft-assertions
+        (expect (getf args :width) :to-be 120)
+        (expect (getf args :height) :to-be 40))))
+
+  (it "falls back to +default-width+/+default-height+ when the terminal size is unavailable"
+    (let ((args (cl-sl/cli::%resolve-run-args (parse-argv (make-sl-app) '("cl-sl")) nil nil)))
+      (with-soft-assertions
+        (expect (getf args :width) :to-be +default-width+)
+        (expect (getf args :height) :to-be +default-height+))))
+
+  (it "defaults --fps to 20 when not given"
+    (expect (getf (cl-sl/cli::%resolve-run-args (parse-argv (make-sl-app) '("cl-sl")) 80 24) :fps)
+            :to-be 20))
+
+  (it "carries the parsed --fps through instead of the default"
+    (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "--fps" "30"))))
+      (expect (getf (cl-sl/cli::%resolve-run-args invocation 80 24) :fps) :to-be 30)))
+
+  (it "carries -a/-l/-F through as :accident-p/:little-p/:fly-p"
+    (let* ((invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "-l" "-F")))
+           (args (cl-sl/cli::%resolve-run-args invocation 80 24)))
+      (with-soft-assertions
+        (expect (getf args :accident-p) :to-be-truthy)
+        (expect (getf args :little-p) :to-be-truthy)
+        (expect (getf args :fly-p) :to-be-truthy)))))

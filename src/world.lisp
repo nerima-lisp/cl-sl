@@ -81,8 +81,8 @@ the very next frame."
 (defparameter +quit-characters+ (list #\q #\Q)
   "Characters that set WORLD-QUIT-REQUESTED on a decoded :CHARACTER event, by
 application convention (q/Q). The classic `sl` has no such key; cl-sl adds it
-anyway to stay consistent with the org's other real-time terminal programs
-(see cl-asciiquarium's input.lisp) and testable the same way.")
+anyway so a full-screen realtime loop that takes over raw mode always has an
+in-band way out, decoded and tested the same way as any other key.")
 
 (defun %quit-key-event-p (event)
   "True when decoded cl-tty-kit KEY-EVENT should set WORLD-QUIT-REQUESTED: a
