@@ -67,18 +67,13 @@ column alignment."
     "Expand to a quoted list of recognized TRAIN-VARIANT keywords.
 
 The returned list is compile-time data, not a mutable runtime registry."
-    '(quote (:normal :little :fly)))
+    '(quote (:normal :little :c51 :fly)))
   (defun %known-train-variant-p (variant)
     "Return true when VARIANT names one of the compiled train variants."
     (case variant
-      ((:normal :little :fly) t)
+      ((:normal :little :c51 :fly) t)
       (otherwise nil)))
-  (defun %train-frames-symbol (variant)
-    "Return the generated frame-vector symbol for VARIANT."
-    (ecase variant
-      (:normal '+train-frames-normal+)
-      (:little '+train-frames-little+)
-      (:fly '+train-frames-fly+))))
+  (defun %train-frames-symbol (variant) "Return the generated frame-vector symbol for VARIANT." (ecase variant (:normal (quote +train-frames-normal+)) (:little (quote +train-frames-little+)) (:c51 (quote +train-frames-c51+)) (:fly (quote +train-frames-fly+)))))
 
 (defun %join-lines (&rest lines)
   "Join LINES with #\\Newline between them. Each line is a complete string
@@ -115,5 +110,6 @@ there is no mutable registry to initialize or accidentally desynchronize."
        (case ,variant-var
          (:normal +train-frames-normal+)
          (:little +train-frames-little+)
+         (:c51 +train-frames-c51+)
          (:fly +train-frames-fly+)
          (otherwise (error 'unknown-variant :name ,variant-var))))))

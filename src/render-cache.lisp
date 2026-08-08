@@ -23,14 +23,7 @@
   (x 0 :read-only t)
   (y 0 :read-only t))
 
-(defstruct (render-cache
-            (:constructor %make-render-cache (sprites)))
-  (sprites nil :read-only t)
-  (screen nil)
-  (screen-width 0)
-  (screen-height 0)
-  (previous-train nil)
-  (previous-background nil))
+(defstruct (render-cache (:constructor %make-render-cache (sprites))) (sprites nil :read-only t) (screen nil) (screen-width 0) (screen-height 0) (previous-train nil) (previous-background nil) (previous-smoke nil))
 
 (defun %line-spans (line)
   "Return LINE's contiguous non-space runs as a vector of cached spans."

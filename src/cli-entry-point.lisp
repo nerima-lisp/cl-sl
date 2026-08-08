@@ -6,28 +6,38 @@
 (in-package #:cl-sl/cli)
 
 (defun make-sl-app ()
-  "Build a fresh CL-CLI app spec for `cl-sl`."
+  "Build a fresh CL-CLI app spec for cl-sl."
   (make-app
    :name "cl-sl"
    :version (%sl-version)
-   :summary "An original ASCII-art steam locomotive for the terminal."
-   :description
-   "Reimplements the classic Unix joke command `sl': an original,
-hand-authored steam locomotive runs across the current terminal and exits
-automatically once it has scrolled fully off screen. Press q to quit early."
+   :summary "The classic steam locomotive animation for the terminal."
+   :description "Runs the canonical sl animation: a fixed-width steam locomotive crosses the terminal and exits after it has scrolled fully off screen. Use -l for the LOGO train, -c for the C51, -a for moving people, and -F for flying motion. Press q to quit early."
    :global-options
-   (list (make-option :name "accident" :short #\a :kind :flag
-                       :description
-                       "A person appears in the train's path; it briefly shows a splat frame on impact.")
-         (make-option :name "little" :short #\l :kind :flag
-                       :description "A shorter train, pulling logs instead of standard cargo.")
-         (make-option :name "fly" :short #\F :kind :flag
-                       :description
-                       "The train's vertical position oscillates as it crosses, wings and all.")
-         (make-option :name "fps" :kind :value :type :integer :min 1 :max 60
-                       :description "Target frames per second (default 20)."))
+   (list
+    (make-option :name "accident"
+                 :short #\a
+                 :kind :flag
+                 :description "Show moving people alongside the train.")
+    (make-option :name "little"
+                 :short #\l
+                 :kind :flag
+                 :description "Use the canonical LOGO train.")
+    (make-option :name "c51"
+                 :short #\c
+                 :kind :flag
+                 :description "Use the canonical C51 steam locomotive.")
+    (make-option :name "fly"
+                 :short #\F
+                 :kind :flag
+                 :description "Apply flying motion without changing the train artwork.")
+    (make-option :name "fps"
+                 :kind :value
+                 :type :integer
+                 :min 1
+                 :max 60
+                 :description "Target animation frame rate (default 25)."))
    :handler (lambda (invocation)
-              (%run-handler invocation #'run #'terminal-size))))
+              (%run-handler invocation (function run) (function terminal-size)))))
 
 (defun main (&key
                    (argv (current-process-argv))

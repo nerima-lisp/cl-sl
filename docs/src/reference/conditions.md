@@ -9,4 +9,5 @@ catch all of them with one `handler-case` clause.
   signaled by `make-world` or `world-resize` given a non-positive width or
   height.
 - `unknown-variant` (`unknown-variant-name`) -- signaled by `make-train` for
-  a variant keyword not listed by `train-variants` (`:normal`, `:little`, `:fly`).
+  a variant keyword not listed by `train-variants` (`:normal`, `:little`, `:c51`,
+  `:fly`).

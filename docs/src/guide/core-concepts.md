@@ -19,8 +19,12 @@ number of times in a test and produce an exactly reproducible final state.
 - `:normal` (default) -- a full-size locomotive pulling two cargo cars,
   running along the terminal's bottom row.
 - `:little` (`-l`/`--little`) -- a shorter train pulling a single log car.
+- `:c51` (`-c`/`--c51`) -- a C51 steam locomotive with its own original art.
 - `:fly` (`-F`/`--fly`) -- winged art whose row oscillates across a few
   discrete levels as it crosses, instead of staying on the bottom row.
+
+When variants are combined, `:fly` wins over `:little`, which wins over
+`:c51`; `:normal` is the fallback.
 
 ## The accident sprite
 

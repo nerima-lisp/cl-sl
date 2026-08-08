@@ -17,7 +17,7 @@ terminal."
       (funcall continuation session-stream))))
 
 (defun run (&key (width +default-width+) (height +default-height+)
-            accident-p little-p fly-p (fps +default-fps+)
+            accident-p little-p c51-p fly-p (fps +default-fps+)
             (stream *standard-output*)
             (input-stream *standard-input*)
             (run-boundary-function #'%run-boundary))
@@ -27,7 +27,7 @@ an interval of 1/FPS. RUN-BOUNDARY-FUNCTION is an injectable CPS boundary
 for callers that provide their own terminal session."
   (let ((world (make-world :width width :height height
                            :accident-p accident-p :little-p little-p
-                           :fly-p fly-p))
+                           :c51-p c51-p :fly-p fly-p))
         (renderer (make-renderer width height))
         (render-cache (make-render-cache)))
     (funcall run-boundary-function

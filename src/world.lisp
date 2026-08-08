@@ -10,30 +10,47 @@
   (unless (and (integerp width) (plusp width) (integerp height) (plusp height))
     (error 'invalid-dimensions :width width :height height)))
 
-(defun %train-variant (little-p fly-p)
-  "-F/--fly wins over -l/--little when both are given: a train cannot be both
-airborne and log-hauling short in this v1, and FLY is the more visually
-distinctive of the two so it is what a caller who asked for both probably
-wants to see."
-  (cond (fly-p :fly)
-        (little-p :little)
+(defun %train-variant (little-p c51-p fly-p)
+  "Return the canonical artwork selected by the command flags."
+  (declare (ignore fly-p))
+  (cond (little-p :little)
+        (c51-p :c51)
         (t :normal)))
 
 (defun make-world (&key (width +default-width+) (height +default-height+)
-                    accident-p little-p fly-p (speed +default-speed+))
-  "Create a WORLD of WIDTH by HEIGHT with a fresh TRAIN starting just off the
-right edge (X = WIDTH), so it enters the screen on its first ticks rather than
-appearing already on screen. VARIANT is derived from LITTLE-P/FLY-P via
-%TRAIN-VARIANT. When ACCIDENT-P, a person sprite is placed at the horizontal
-midpoint of WORLD for the train to reach partway across."
+                    accident-p little-p c51-p fly-p (speed +canonical-speed+))
+  "Create a canonical sl WORLD with a fresh TRAIN just before the first tick."
   (%assert-dimensions width height)
   (%make-world :width width :height height :tick 0
-               :train (make-train :x width :dx speed
-                                   :variant (%train-variant little-p fly-p))
+               :train (make-train :x width
+                                  :dx speed
+                                  :variant (%train-variant little-p c51-p fly-p)
+                                  :fly-p fly-p)
                :accident-p accident-p
+               :smoke-puffs nil
                :person-x (floor width 2)
                :person-struck-p nil
                :quit-requested nil))
+
+(defun %advance-smoke-puffs (world)
+  "Advance existing smoke puffs and spawn the next puff when due."
+  (let* ((train (world-train world))
+         (x (truncate (train-x train)))
+         (smoke-x (+ x (%canonical-train-funnel (train-variant train)))))
+    (when (zerop (mod smoke-x 4))
+      (dolist (puff (reverse (world-smoke-puffs world)))
+        (let ((stage (smoke-puff-stage puff)))
+          (incf (smoke-puff-x puff) (canonical-smoke-dx stage))
+          (decf (smoke-puff-y puff) (canonical-smoke-dy stage))
+          (when (< stage 15)
+            (incf (smoke-puff-stage puff)))))
+      (push (%make-smoke-puff
+             :x smoke-x
+             :y (1- (train-y train world))
+             :stage 0
+             :kind (mod (length (world-smoke-puffs world)) 2))
+            (world-smoke-puffs world))))
+  world)
 
 (defun world-quitp (world)
   "True once WORLD's train has fully scrolled off the left edge (see
@@ -75,10 +92,8 @@ WORLD."
   world)
 
 (defun world-advance (world)
-  "Advance WORLD by exactly one tick, returning WORLD: the train moves (or, if
-mid-collision, stays paused on the splat frame) and animates, then a fresh
-collision against the accident sprite is applied if one is due."
+  "Advance WORLD by one canonical animation tick."
   (incf (world-tick world))
   (train-advance (world-train world))
-  (apply-collision world)
+  (%advance-smoke-puffs world)
   world)

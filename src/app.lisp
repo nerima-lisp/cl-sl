@@ -49,7 +49,9 @@ even run when FD 0 is not one (see its docstring: \"when supported\")."
   (tick-loop-run-realtime
    world
    #'world-advance
-   (lambda (state) (render-frame renderer state render-cache))
+   (lambda (state)
+     (unless (train-exited-p (world-train state) state)
+       (render-frame renderer state render-cache)))
    #'world-quitp
    :stream output-stream
    :interval (/ 1 fps)

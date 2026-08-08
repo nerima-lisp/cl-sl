@@ -16,10 +16,13 @@
 
 (defparameter +default-width+ 80)
 (defparameter +default-height+ 24)
-(defparameter +default-fps+ 20 "Default realtime-loop frame rate.")
+(defparameter +default-fps+ 25 "Default realtime-loop frame rate.")
 
 (defparameter +default-speed+ -2.0
-  "Default TRAIN-DX: two columns per tick, leftward.")
+  "Legacy default retained for direct TRAIN construction compatibility.")
+
+(defparameter +canonical-speed+ -1.0
+  "Canonical command speed: one column per tick, leftward.")
 
 (defparameter +quit-characters+ (list #\q #\Q)
   "Characters that request an early quit from the realtime loop.")

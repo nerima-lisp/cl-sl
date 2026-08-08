@@ -3,22 +3,22 @@
 
 (describe "train-strikes-person-p"
   (it "is false when accident-p is off, regardless of position"
-    (let* ((world (tiny-world :width 40 :height 20 :accident-p nil))
+    (let* ((world (tiny-world :width 40 :height 10 :accident-p nil))
            (train (world-train world)))
       (setf (train-x train) (float (world-person-x world)))
       (expect (train-strikes-person-p world) :to-be-falsy)))
   (it "is true once the train's bounding box overlaps the person's column"
-    (let* ((world (tiny-world :width 40 :height 20 :accident-p t))
+    (let* ((world (tiny-world :width 40 :height 10 :accident-p t))
            (train (world-train world)))
       (setf (train-x train) (float (world-person-x world)))
       (expect (train-strikes-person-p world) :to-be-truthy)))
   (it "is false while the train has not yet reached the person"
-    (let* ((world (tiny-world :width 40 :height 20 :accident-p t))
+    (let* ((world (tiny-world :width 40 :height 10 :accident-p t))
            (train (world-train world)))
       (setf (train-x train) (float (world-width world)))
       (expect (train-strikes-person-p world) :to-be-falsy)))
   (it "is false when the train only touches the person's left edge"
-    (let* ((world (tiny-world :width 40 :height 20 :accident-p t))
+    (let* ((world (tiny-world :width 40 :height 10 :accident-p t))
            (train (world-train world)))
       (setf (train-x train)
             (- (float (world-person-x world)) (train-width train)))
@@ -26,7 +26,7 @@
 
 (describe "apply-collision"
   (before-each
-    (setf *world* (tiny-world :width 40 :height 20 :accident-p t))
+    (setf *world* (tiny-world :width 40 :height 10 :accident-p t))
     (setf *train* (world-train *world*)))
 
   (it "pauses the train and marks the person struck on impact"

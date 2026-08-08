@@ -11,11 +11,17 @@
   (it "defaults to the :normal variant with no flags"
     (let ((world (make-world :width 40 :height 20)))
       (expect (train-variant (world-train world)) :to-be :normal)))
-  (it "selects :little for little-p and :fly for fly-p, with fly winning when both are given"
+  (it "keeps -F as motion while artwork flags select the train"
     (with-soft-assertions
-      (expect (train-variant (world-train (make-world :little-p t))) :to-be :little)
-      (expect (train-variant (world-train (make-world :fly-p t))) :to-be :fly)
-      (expect (train-variant (world-train (make-world :little-p t :fly-p t))) :to-be :fly)))
+      (let ((fly-world (make-world :fly-p t))
+            (little-fly-world (make-world :little-p t :fly-p t))
+            (c51-fly-world (make-world :c51-p t :fly-p t)))
+        (expect (train-variant (world-train fly-world)) :to-be :normal)
+        (expect (train-fly-p (world-train fly-world)) :to-be-truthy)
+        (expect (train-variant (world-train little-fly-world)) :to-be :little)
+        (expect (train-fly-p (world-train little-fly-world)) :to-be-truthy)
+        (expect (train-variant (world-train c51-fly-world)) :to-be :c51)
+        (expect (train-fly-p (world-train c51-fly-world)) :to-be-truthy))))
   (it "places the accident sprite at the horizontal midpoint when accident-p"
     (let ((world (make-world :width 40 :height 20 :accident-p t)))
       (expect (world-person-x world) :to-be 20))))
@@ -48,17 +54,20 @@
        (speed (gen-integer :min -6 :max -1)))
       (:trials 40 :timeout-per-trial 2)
     (let ((world (make-world :width width :height height
-                              :little-p (eq variant :little) :fly-p (eq variant :fly)
+                              :little-p (eq variant :little) :c51-p (eq variant :c51)
+                              :fly-p (eq variant :fly)
                               :accident-p accident-p :speed speed)))
       (dotimes (i ticks) (world-advance world)))))
 
 (describe "an accident (-a) run, deterministically"
-  (it "strikes the person partway across and shows the splat until the train resumes"
+  (it "keeps the train moving and emits canonical smoke at the upstream funnel coordinate"
     (let* ((world (make-world :width 40 :height 10 :accident-p t :speed -1.0))
            (train (world-train world)))
-      (dotimes (i 400)
-        (unless (world-person-struck-p world) (world-advance world)))
-      (expect (world-person-struck-p world) :to-be-truthy)
-      (expect (train-collision-state train) :to-be :struck)
-      (dotimes (i cl-sl::+collision-ticks+) (world-advance world))
-      (expect (train-collision-state train) :to-be :done))))
+      (dotimes (i 3) (world-advance world))
+      (with-soft-assertions
+        (expect (train-x train) :to-be 37.0)
+        (expect (world-person-struck-p world) :to-be-falsy)
+        (expect (train-collision-state train) :to-be :none)
+        (expect (length (world-smoke-puffs world)) :to-be 1)
+        (expect (smoke-puff-x (first (world-smoke-puffs world))) :to-be 44)
+        (expect (smoke-puff-stage (first (world-smoke-puffs world))) :to-be 0)))))

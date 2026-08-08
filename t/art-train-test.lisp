@@ -6,7 +6,7 @@
   (map 'list (lambda (frame) (multiple-value-list (cl-sl::sprite-dimensions frame))) frames))
 
 (describe "train art frame tables"
-  (it-each ((:normal) (:little) (:fly))
+  (it-each ((:normal) (:little) (:c51) (:fly))
       "every frame of the ~A variant shares one (width, height)"
       (variant)
     (let* ((frames (cl-sl::%train-frames variant))

@@ -31,14 +31,15 @@ delivered binary, not the ASDF system.
 cl-sl              # the default full-size train
 cl-sl -a           # -a/--accident: a person appears in its path
 cl-sl -l           # -l/--little: a shorter train pulling logs
+cl-sl -c           # -c/--c51: the C51 steam locomotive
 cl-sl -F           # -F/--fly: the train's height oscillates as it crosses
-cl-sl --fps 30     # target frames per second (1-60, default 20)
+cl-sl --fps 30     # target frames per second (1-60, default 25)
 cl-sl --help       # usage and the full flag list
 cl-sl --version    # print the running version
 ```
 
-`-F`/`--fly` wins over `-l`/`--little` when both are given: a train cannot
-be both airborne and log-hauling short in this v1.
+`-F`/`--fly` wins over `-l`/`--little` and `-c`/`--c51`; `-l` wins over
+`-c` when those options are combined.
 
 Press `q` or Ctrl-C at any time to quit early; otherwise the program exits
 on its own once the train has fully scrolled off the left edge of the

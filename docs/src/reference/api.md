@@ -3,19 +3,19 @@
 ## Entry point
 
 - `cl-sl:run` with `&key (width +default-width+) (height +default-height+)`
-  `accident-p little-p fly-p (fps +default-fps+) (stream *standard-output*)`
+  `accident-p little-p c51-p fly-p (fps +default-fps+) (stream *standard-output*)`
   `(input-stream *standard-input*) run-boundary-function` --
   runs the locomotive across the real terminal until it fully scrolls off
   the left edge, or `q`/Ctrl-C is pressed early. `accident-p`/`little-p`/
-  `fly-p` select the `-a`/`-l`/`-F` variants (see `make-world`); `fps` is the
-  target frames-per-second value passed to the realtime tick loop. The
+  `c51-p`/`fly-p` select the `-a`/`-l`/`-c`/`-F` variants (see `make-world`);
+  `fps` is the target frames-per-second value passed to the realtime tick loop. The
   `run-boundary-function` keyword is a CPS seam receiving the output stream and
   a continuation; tests use it to avoid opening a real terminal.
 
 ## Train
 
 - `cl-sl:make-train (&key (x 0.0) (dx -2.0) (variant :normal))` -- `variant`
-  is one of `:normal`, `:little`, `:fly` (see `train-variants`); signals
+  is one of `:normal`, `:little`, `:c51`, `:fly` (see `train-variants`); signals
   `unknown-variant` for anything else.
 - `cl-sl:train-advance (train)` -- the pure per-tick transition: moves,
   animates, and counts down an active collision pause.
@@ -28,10 +28,10 @@
 ## World
 
 - `cl-sl:make-world` with `&key (width +default-width+) (height +default-height+)`
-  `accident-p little-p fly-p (speed -2.0)` --
-  signals `invalid-dimensions` for a non-positive width or height. `-F`/`-l`
-  resolve to `variant` the same way `run`'s do; `-F` wins when both
-  `little-p` and `fly-p` are true.
+  `accident-p little-p c51-p fly-p (speed -2.0)` -- signals
+  `invalid-dimensions` for a non-positive width or height. `-F`/`-l`/`-c`
+  resolve to `variant` the same way `run`'s do; `fly-p` wins over `little-p`,
+  which wins over `c51-p`.
 - `cl-sl:world-advance (world)` -- one pure simulation tick.
 - `cl-sl:world-resize (world width height)`.
 - `cl-sl:world-quitp (world)` -- true once the train has fully left the
@@ -54,10 +54,10 @@
 
 - `cl-sl:+default-width+` (80), `cl-sl:+default-height+` (24) -- `run`'s and
   `make-world`'s default terminal size when the caller does not pass one.
-- `cl-sl:+default-fps+` (20) -- the default target frame rate for `run` and the
+- `cl-sl:+default-fps+` (25) -- the default target frame rate for `run` and the
   CLI.
 - `cl-sl:train-variants` -- a macro expanding to the valid `make-train`/
-  `make-world` variant keywords: `:normal`, `:little`, `:fly`.
+  `make-world` variant keywords: `:normal`, `:little`, `:c51`, `:fly`.
 
 ## Conditions
 

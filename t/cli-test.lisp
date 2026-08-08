@@ -7,11 +7,12 @@
 (in-package #:cl-sl/test)
 
 (describe "the cl-sl app spec: flag parsing round-trips"
-  (it "defaults -a/-l/-F and --fps to unset/false"
+  (it "defaults -a/-l/-F/-c and --fps to unset/false"
     (let ((invocation (parse-argv (make-sl-app) '("cl-sl"))))
       (with-soft-assertions
         (expect (option-value invocation :accident) :to-be-falsy)
         (expect (option-value invocation :little) :to-be-falsy)
+        (expect (option-value invocation :c51) :to-be-falsy)
         (expect (option-value invocation :fly) :to-be-falsy)
         (expect (option-value invocation :fps) :to-be-falsy))))
 
@@ -32,12 +33,27 @@
       (expect (option-value (parse-argv (make-sl-app) '("cl-sl" "-F")) :fly) :to-be-truthy)
       (expect (option-value (parse-argv (make-sl-app) '("cl-sl" "--fly")) :fly) :to-be-truthy)))
 
-  (it "combines -a, -l, and -F on one invocation"
-    (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "-l" "-F"))))
+  (it "parses -c/--c51 as a flag"
+    (with-soft-assertions
+      (expect (option-value (parse-argv (make-sl-app) '("cl-sl" "-c")) :c51) :to-be-truthy)
+      (expect (option-value (parse-argv (make-sl-app) '("cl-sl" "--c51")) :c51)
+              :to-be-truthy)))
+
+  (it "combines -a, -l, -F, and -c on one invocation"
+    (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "-l" "-F" "-c"))))
       (with-soft-assertions
         (expect (option-value invocation :accident) :to-be-truthy)
         (expect (option-value invocation :little) :to-be-truthy)
+        (expect (option-value invocation :c51) :to-be-truthy)
         (expect (option-value invocation :fly) :to-be-truthy))))
+
+  (it "accepts canonical bundled short flags"
+    (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "-alFc"))))
+      (with-soft-assertions
+        (expect (option-value invocation :accident) :to-be-truthy)
+        (expect (option-value invocation :little) :to-be-truthy)
+        (expect (option-value invocation :fly) :to-be-truthy)
+        (expect (option-value invocation :c51) :to-be-truthy))))
 
   (it "parses --fps as an integer"
     (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "--fps" "30"))))
@@ -92,18 +108,19 @@
     (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "--fps" "30"))))
       (expect (getf (cl-sl/cli::%resolve-run-args invocation 80 24) :fps) :to-be 30)))
 
-  (it "carries -a/-l/-F through as :accident-p/:little-p/:fly-p"
-    (let* ((invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "-l" "-F")))
+  (it "carries -a/-l/-F/-c through as simulation flags"
+    (let* ((invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "-l" "-F" "-c")))
            (args (cl-sl/cli::%resolve-run-args invocation 80 24)))
       (with-soft-assertions
         (expect (getf args :accident-p) :to-be-truthy)
         (expect (getf args :little-p) :to-be-truthy)
+        (expect (getf args :c51-p) :to-be-truthy)
         (expect (getf args :fly-p) :to-be-truthy)))))
 
 (describe "%run-handler"
   (it "passes resolved arguments to the injected runner and returns success"
     (let ((run-args nil)
-          (invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "--fps" "30"))))
+          (invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "-c" "--fps" "30"))))
       (expect (cl-sl/cli::%run-handler
                 invocation
                 (lambda (&rest args)
@@ -114,7 +131,8 @@
         (expect (getf run-args :width) :to-be 120)
         (expect (getf run-args :height) :to-be 40)
         (expect (getf run-args :fps) :to-be 30)
-        (expect (getf run-args :accident-p) :to-be-truthy)))))
+        (expect (getf run-args :accident-p) :to-be-truthy)
+        (expect (getf run-args :c51-p) :to-be-truthy)))))
 
 (describe "main and image-entry-point"
   (it "hands an explicit argv to the injected app runner and quitter"

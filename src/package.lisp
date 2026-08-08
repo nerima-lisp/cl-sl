@@ -61,6 +61,7 @@
    #:train-x
    #:train-dx
    #:train-variant
+   #:train-fly-p
    #:train-frame-index
    #:train-collision-state
    #:train-collision-ttl
@@ -82,6 +83,13 @@
    #:world-tick
    #:world-train
    #:world-accident-p
+   #:smoke-puff
+   #:smoke-puff-p
+   #:smoke-puff-x
+   #:smoke-puff-y
+   #:smoke-puff-stage
+   #:smoke-puff-kind
+   #:world-smoke-puffs
    #:world-person-x
    #:world-person-struck-p
    #:world-quit-requested

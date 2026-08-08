@@ -20,6 +20,7 @@ I/O of its own -- so it is tested directly in t/cli-test.lisp, unlike
         :height (or detected-rows +default-height+)
         :accident-p (option-value invocation :accident)
         :little-p (option-value invocation :little)
+        :c51-p (option-value invocation :c51)
         :fly-p (option-value invocation :fly)
         :fps (or (option-value invocation :fps) +default-fps+)))
 
