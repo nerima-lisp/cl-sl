@@ -3,7 +3,7 @@
 ;;; `load`, an editor evaluating the buffer, flake.nix parsing :version --
 ;;; the file is read in whatever package happens to be current, and an
 ;;; unqualified `defsystem` then fails to read at all. See
-;;; PACKAGE_STANDARD.md "asd の書き方".
+;;; docs/src/reference/architecture.md for the system layout.
 (in-package #:asdf-user)
 
 (defsystem "cl-sl"
@@ -20,29 +20,59 @@ repository. SBCL only."
   :homepage "https://github.com/nerima-lisp/cl-sl"
   :bug-tracker "https://github.com/nerima-lisp/cl-sl/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-sl.git")
-  :depends-on ("cl-tty-kit"    ; screens, sprites, the realtime tick loop, raw mode, input decoding
-               "cl-cli")       ; -a/-l/-F/--fps command-line parsing, --help/--version
+  :depends-on ("cl-tty-kit" "cl-concurrent-kit")
+  ;; cl-tty-kit owns the screen and realtime loop; cl-concurrent-kit prepares
+  ;; immutable sprite spans before the single screen owner starts rendering.
   :pathname "src"
   :serial t
+  ;; Bind the reader package for every source component.  ASDF applies this
+  ;; hook to compilation and source loading, so package transitions do not
+  ;; become artificial SB-COVER expressions in behavior-bearing files.
+  :around-compile (lambda (next)
+                    (let ((*package* (or (find-package "CL-SL") *package*)))
+                      (funcall next)))
   :components ((:file "package")
                (:file "conditions")
                (:file "art-train")
                (:file "art-train-data")
+               (:file "constants")
+               (:file "state")
                (:file "train")
                (:file "world")
                (:file "collision")
+               (:file "render-cache")
                (:file "render")
                (:file "app")
-               (:file "cli"))
-  ;; Delivers the `cl-sl` executable via `(asdf:operate 'asdf:program-op
-  ;; "cl-sl")` / `nix build`, both driven from these three keys -- see
-  ;; cl-weave.asd, which this follows, and flake.nix's `executable` block.
+               (:file "terminal"))
+  ;; Keep the library system loadable without command-line parsing or process
+  ;; exit behavior. The executable lives in CL-SL/CLI below.
+  ;; Mandatory. Without it `asdf:test-system "cl-sl"` succeeds while running
+  ;; zero tests. See docs/src/project/development.md.
+  :in-order-to ((test-op (test-op "cl-sl/test"))))
+
+(defsystem "cl-sl/cli"
+  :description "Command-line executable for cl-sl."
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
+  :license "MIT"
+  :version "0.1.0"
+  :homepage "https://github.com/nerima-lisp/cl-sl"
+  :bug-tracker "https://github.com/nerima-lisp/cl-sl/issues"
+  :source-control (:git "https://github.com/nerima-lisp/cl-sl.git")
+  :depends-on ("cl-sl" "cl-cli")
+  :pathname "src"
+  :serial t
+  :around-compile (lambda (next)
+                    (let ((*package* (or (find-package "CL-SL/CLI") *package*)))
+                      (funcall next)))
+  :components ((:file "cli-package")
+               (:file "cli")
+               (:file "cli-entry-point"))
+  ;; The command package owns delivery. Loading CL-SL as a library does not
+  ;; pull in CL-CLI or establish a process entry point.
   :build-operation "program-op"
   :build-pathname "cl-sl"
-  :entry-point "cl-sl/cli::image-entry-point"
-  ;; Mandatory. Without it `asdf:test-system "cl-sl"` succeeds while running
-  ;; zero tests. See PACKAGE_STANDARD.md.
-  :in-order-to ((test-op (test-op "cl-sl/test"))))
+  :entry-point "cl-sl/cli::image-entry-point")
 
 ;;; The test system is `cl-sl/test` (singular, slash-separated) with
 ;;; :pathname "t". It is NOT `cl-sl-test`.
@@ -61,9 +91,9 @@ repository. SBCL only."
   ;; Test-only: cl-tty-kit for DECODE-INPUT (t/world-test.lisp and
   ;; t/render-test.lisp build KEY-EVENTs and fixture SCREENs from it directly;
   ;; see t/package.lisp). It is already the main system's own dependency, at
-  ;; the same layer, so this stays within DEPENDENCY_POLICY.md's
-  ;; test-only-dependency limit.
-  :depends-on ("cl-sl" "cl-weave" "cl-tty-kit")
+  ;; the same layer, so this stays within the test-only dependency policy in
+  ;; docs/src/project/development.md.
+  :depends-on ("cl-sl" "cl-sl/cli" "cl-weave" "cl-tty-kit")
   :pathname "t"
   :serial t
   :components ((:file "package")

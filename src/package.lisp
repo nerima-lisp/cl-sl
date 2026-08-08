@@ -1,27 +1,28 @@
-;;;; src/package.lisp -- both DEFPACKAGE forms for this repository.
+;;;; src/package.lisp -- the CL-SL library package.
 ;;;;
-;;;; Two packages, per PACKAGE_STANDARD.md: CL-SL is the pure rendering/
-;;;; simulation library (train/world state, the advance function, art data,
-;;;; and the real-terminal run loop) and CL-SL/CLI is the thin command-line
-;;;; front end over it. Splitting them keeps `(asdf:load-system "cl-sl")`
-;;;; usable as a library with no CL-CLI-flavoured argv parsing along for the
-;;;; ride -- an embedder that wants the locomotive without a CLI never
-;;;; transitively pulls in cl-cli at all.
+;;;; CL-SL is the rendering/simulation library (train/world state, the
+;;;; advance function, art data, and the real-terminal run loop). The
+;;;; command-line package is in cli-package.lisp and belongs to the separate
+;;;; CL-SL/CLI ASDF system, so `(asdf:load-system "cl-sl")` has no process
+;;;; argument parsing or exit behavior attached to it.
 ;;;;
-;;;; CODING_STANDARD.md requires `:use` to name only #:cl and every sibling
-;;;; package to come in through `:import-from`, so the outsize import list
-;;;; below is the price of that rule, not an oversight.
+;;;; The package boundary follows the import-only convention documented in
+;;;; docs/src/reference/architecture.md; the outsize import list below is
+;;;; deliberate, not an oversight.
 (in-package #:cl-user)
 
 (defpackage #:cl-sl
   (:use #:cl)
   ;; cl-tty-kit (L1): screens, sprites, the tick loop, raw mode, and input
-  ;; decoding. This is the whole rendering/IO substrate for RUN in app.lisp.
+  ;; decoding. This is the rendering/IO substrate used by RUN in terminal.lisp.
   (:import-from #:cl-tty-kit
                 #:make-screen
                 #:screen-width
                 #:screen-height
                 #:screen-clear
+                #:make-cell
+                #:screen-fill-rect
+                #:screen-write-string
                 #:with-screen-batch
                 #:sprite-blit
                 #:make-style
@@ -51,7 +52,7 @@
    #:unknown-variant-name
 
    ;; -- Art data --
-   #:+train-variants+
+   #:train-variants
 
    ;; -- Train state --
    #:train
@@ -105,24 +106,5 @@
    ;; -- Application entry point --
    #:run
    #:+default-width+
-   #:+default-height+))
-
-(defpackage #:cl-sl/cli
-  (:documentation "The `cl-sl` command-line front end over CL-SL.")
-  (:use #:cl)
-  (:import-from #:cl-sl
-                #:run
-                #:+default-width+
-                #:+default-height+)
-  (:import-from #:cl-tty-kit
-                #:terminal-size)
-  (:import-from #:cl-cli
-                #:make-app
-                #:make-option
-                #:run-app
-                #:option-value
-                #:current-process-argv)
-  (:export
-   #:make-sl-app
-   #:main
-   #:image-entry-point))
+   #:+default-height+
+   #:+default-fps+))

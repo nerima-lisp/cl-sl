@@ -7,47 +7,15 @@
 ;;;; discipline in TRAIN-ADVANCE below -- so WORLD-ADVANCE (world.lisp) can
 ;;;; call it a fixed number of times and produce an exactly reproducible final
 ;;;; state, the property every test in t/ relies on.
-(in-package #:cl-sl)
 
-(defparameter +frame-period+ 4
-  "Ticks between animation frame advances (smoke drift / wheel spin).")
-
-(defparameter +collision-ticks+ 8
-  "Ticks the train pauses, showing the splat frame, once it strikes the
-accident sprite (see collision.lisp).")
-
-(defparameter +fly-y-offsets+ #(0 -1 -2 -3 -2 -1)
-  "Vertical offsets (negative moves UP, screen rows count down from 0 at the
-top) a :FLY train cycles through as it crosses, giving it a simple discrete
-sine-like arc above the row a grounded train runs along.")
-
-(defstruct (train (:constructor %make-train))
-  "X is the column of the sprite's left edge (a real number; velocity may be
-fractional even though rendering rounds it to a cell). DX is added to X each
-tick, except while COLLISION-STATE is :STRUCK. VARIANT selects the frame
-table in art-train.lisp. FRAME-INDEX/FRAME-TIMER drive the smoke/wheel
-animation. COLLISION-STATE is :NONE before any accident sprite is struck,
-:STRUCK for +COLLISION-TICKS+ ticks of showing the splat frame (during which
-DX is suspended and SAVED-DX remembers the pre-collision velocity to restore),
-and :DONE once the train has resumed moving. FLY-TICK counts ticks for a :FLY
-train's +FLY-Y-OFFSETS+ cycle and is unused by any other variant."
-  (x 0.0 :type real)
-  (dx 0.0 :type real)
-  (saved-dx 0.0 :type real)
-  (variant :normal :type keyword)
-  (frame-index 0 :type fixnum)
-  (frame-timer +frame-period+ :type fixnum)
-  (collision-state :none :type keyword)
-  (collision-ttl nil :type (or null fixnum))
-  (fly-tick 0 :type fixnum))
-
-(defun make-train (&key (x 0.0) (dx -2.0) (variant :normal))
-  "Create a TRAIN at X with velocity DX (negative moves left, the direction
-the train crosses the screen) and animation VARIANT, a member of
-+TRAIN-VARIANTS+. Signals UNKNOWN-VARIANT for anything else."
-  (unless (member variant +train-variants+)
-    (error 'unknown-variant :name variant))
-  (%make-train :x x :dx dx :variant variant))
+(defun make-train (&key x dx variant)
+  "Create a TRAIN at X with velocity DX and animation VARIANT. Missing keyword values use the public defaults. Signals UNKNOWN-VARIANT for anything else."
+  (let ((x (or x 0.0))
+        (dx (or dx +default-speed+))
+        (variant (or variant :normal)))
+    (unless (%known-train-variant-p variant)
+      (error 'unknown-variant :name variant))
+    (%make-train :x x :dx dx :variant variant)))
 
 (defun train-art (train)
   "Return TRAIN's current animation frame, from its VARIANT's frame table."
@@ -82,15 +50,25 @@ variant runs along the baseline unconditionally."
 (X + WIDTH) has crossed column 0."
   (minusp (+ (train-x train) (train-width train))))
 
+(defun %advance-frame-state (frame-index frame-timer frame-count)
+  "Return the next animation state for FRAME-COUNT frames."
+  (if (> frame-count 1)
+      (let ((next-timer (1- frame-timer)))
+        (if (plusp next-timer)
+            (values frame-index next-timer)
+            (values (mod (1+ frame-index) frame-count)
+                    +frame-period+)))
+      (values frame-index frame-timer)))
+
 (defun %train-tick-animation (train)
-  "Advance TRAIN's smoke/wheel animation by one tick, looping FRAME-INDEX
-through its variant's frame table every +FRAME-PERIOD+ ticks."
+  "Advance TRAIN's smoke/wheel animation by one tick."
   (let ((frame-count (length (%train-frames (train-variant train)))))
-    (when (> frame-count 1)
-      (decf (train-frame-timer train))
-      (when (<= (train-frame-timer train) 0)
-        (setf (train-frame-index train) (mod (1+ (train-frame-index train)) frame-count))
-        (setf (train-frame-timer train) +frame-period+)))))
+    (multiple-value-bind (frame-index frame-timer)
+        (%advance-frame-state (train-frame-index train)
+                              (train-frame-timer train)
+                              frame-count)
+      (setf (train-frame-index train) frame-index
+            (train-frame-timer train) frame-timer))))
 
 (defun train-advance (train)
   "Advance TRAIN by exactly one tick, returning TRAIN. While

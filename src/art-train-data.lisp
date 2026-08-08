@@ -8,9 +8,8 @@
 ;;;; of it is copied or transcribed from the classic Unix `sl.c` train art.
 ;;;; Each variant is a short list of animation frames (smoke drifting, wheels
 ;;;; spinning) that differ only in a handful of glyphs; %DEFINE-TRAIN-VARIANT
-;;;; (art-train.lisp) normalizes them and registers the result for
-;;;; %TRAIN-FRAMES to look up, so every ;;; block below is nothing but string
-;;;; literals passed through it.
+;;;; (art-train.lisp) normalizes them and emits a static frame vector, so every
+;;;; ;;; block below is nothing but string literals passed through it.
 (in-package #:cl-sl)
 
 ;;; :NORMAL -- a full-size locomotive pulling two cargo cars. Three frames:
