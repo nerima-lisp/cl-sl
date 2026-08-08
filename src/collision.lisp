@@ -4,7 +4,6 @@
 ;;;; against the fixed -a/--accident person sprite -- so, unlike a busier
 ;;;; simulation's NxN interaction matrix, this file is a single bounding-box
 ;;;; test plus the one state transition it can trigger.
-(in-package #:cl-sl)
 
 (defun %rects-overlap-p (ax ay aw ah bx by bw bh)
   "Return true when the two axis-aligned boxes (AX, AY, AW, AH) and

@@ -10,7 +10,7 @@
     # this repository's entire required-output table, so none of it is
     # spelled out here and none of it can drift from the other repositories.
     cl-nix-forge = {
-      url = "github:nerima-lisp/cl-nix-forge/v0.4.1";
+      url = "github:nerima-lisp/cl-nix-forge/v0.5.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -19,9 +19,9 @@
     # would break this repo's CI without warning the moment upstream pushes
     # to main. `flake = false`: only the source tree is needed (to build a
     # `lispDerivation` below), never these repos' own flake outputs -- see
-    # DEPENDENCY_POLICY.md "姉妹パッケージは flake = false で引きます".
+    # docs/src/project/development.md for the dependency policy.
     cl-tty-kit = {
-      url = "github:nerima-lisp/cl-tty-kit/v1.4.0";
+      url = "github:nerima-lisp/cl-tty-kit/v1.5.0";
       flake = false;
     };
 
@@ -36,19 +36,35 @@
     # cl-cli's OWN :depends-on must be satisfied by giving THEIR
     # lispDerivation calls a lispDependencies list (see `lispDependencies`
     # below) -- flattening every sibling into this repository's own list
-    # would not reach a nested build. See DEPENDENCY_POLICY.md's L1 table.
+    # would not reach a nested build. See the dependency policy in
+    # docs/src/project/development.md.
     cl-codec-kit = {
-      url = "github:nerima-lisp/cl-codec-kit/v0.4.0";
+      url = "github:nerima-lisp/cl-codec-kit/v0.5.0";
       flake = false;
     };
 
     cl-host-kit = {
-      url = "github:nerima-lisp/cl-host-kit/v0.3.0";
+      url = "github:nerima-lisp/cl-host-kit/v0.3.1";
+      flake = false;
+    };
+
+    cl-boundary-kit = {
+      url = "github:nerima-lisp/cl-boundary-kit/v2.3.0";
+      flake = false;
+    };
+
+    cl-date-kit = {
+      url = "github:nerima-lisp/cl-date-kit/v1.0.0";
+      flake = false;
+    };
+
+    cl-concurrent-kit = {
+      url = "github:nerima-lisp/cl-concurrent-kit/v0.6.1";
       flake = false;
     };
 
     cl-weave = {
-      url = "github:nerima-lisp/cl-weave/v1.2.0";
+      url = "github:nerima-lisp/cl-weave/v1.3.0";
       flake = false;
     };
 
@@ -56,16 +72,10 @@
     # output (`mkLintCheck`), which a `flake = false` source tree cannot
     # provide -- the same reason cl-cli keeps it a real flake input.
     #
-    # Pinned to v1.3.0, NOT the newer v1.4.0: v1.4.0's own `lib` output only
-    # covers `x86_64-linux` (verified via `nix eval
-    # github:nerima-lisp/paredit-cli/v1.4.0#lib --apply builtins.attrNames`),
-    # which breaks `checks.aarch64-darwin.paredit-lint` outright on this
-    # repository's own declared development system (`systems` below). v1.3.0
-    # is the newest release that still publishes `lib` for all four systems
-    # cl-nix-forge's preset expects. Re-pin to v1.4.0 (or newer) once upstream
-    # restores that coverage.
+    # v1.5.0 publishes the lint library for the development and CI systems
+    # declared below.
     paredit-cli = {
-      url = "github:nerima-lisp/paredit-cli/v1.3.0";
+      url = "github:nerima-lisp/paredit-cli/v1.5.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -82,7 +92,10 @@
       cl-nix-forge,
       cl-tty-kit,
       cl-cli,
+      cl-boundary-kit,
       cl-codec-kit,
+      cl-concurrent-kit,
+      cl-date-kit,
       cl-host-kit,
       cl-weave,
       paredit-cli,
@@ -93,7 +106,7 @@
       # machine. Every per-system output -- packages, checks, apps AND devShells
       # -- comes from this one list, so leaving aarch64-darwin out takes `nix
       # build` and `nix develop` off the development machine as well. See
-      # PACKAGE_STANDARD.md's "systems" section, which accepts this explicitly.
+      # docs/src/reference/architecture.md for the supported system boundary.
       # aarch64-linux and x86_64-darwin are nobody's verification and are not
       # declared.
       systems = [
@@ -120,16 +133,37 @@
         mainProgram = "cl-sl";
       };
 
-      # Runtime dependencies: cl-sl's own :DEPENDS-ON. These are BUILT
-      # DERIVATIONS, not CL_SOURCE_REGISTRY strings -- cl-nix-forge assembles
-      # the registry transitively from them. cl-tty-kit and cl-cli each need
-      # one further sibling of their own (cl-codec-kit, cl-host-kit
-      # respectively); each nested lispDerivation call gets its OWN
-      # lispDependencies for the same reason this list exists at all -- see
-      # the flake input comment above.
+      # Runtime dependency closure for both the core library and the separate
+      # cl-sl/cli executable. These are BUILT DERIVATIONS, not
+      # CL_SOURCE_REGISTRY strings -- cl-nix-forge assembles the registry
+      # transitively from them. cl-cli is included here for the executable;
+      # the core ASDF system itself depends only on cl-tty-kit.
       lispDependencies =
         ctx:
         let
+          boundaryKit = ctx.cl.lispDerivation {
+            pname = "cl-boundary-kit";
+            version = ctx.cl.fromAsdSystem "${cl-boundary-kit}/cl-boundary-kit.asd";
+            src = cl-boundary-kit;
+            lispSystem = "cl-boundary-kit";
+            lispDependencies = [ hostKit ];
+          };
+          dateKit = ctx.cl.lispDerivation {
+            pname = "cl-date-kit";
+            version = ctx.cl.fromAsdSystem "${cl-date-kit}/cl-date-kit.asd";
+            src = cl-date-kit;
+            lispSystem = "cl-date-kit";
+          };
+          concurrentKit = ctx.cl.lispDerivation {
+            pname = "cl-concurrent-kit";
+            version = ctx.cl.fromAsdSystem "${cl-concurrent-kit}/cl-concurrent-kit.asd";
+            src = cl-concurrent-kit;
+            lispSystem = "cl-concurrent-kit";
+            lispDependencies = [
+              boundaryKit
+              dateKit
+            ];
+          };
           codecKit = ctx.cl.lispDerivation {
             pname = "cl-codec-kit";
             version = ctx.cl.fromAsdSystem "${cl-codec-kit}/cl-codec-kit.asd";
@@ -149,7 +183,10 @@
             version = ctx.cl.fromAsdSystem "${cl-tty-kit}/cl-tty-kit.asd";
             src = cl-tty-kit;
             lispSystem = "cl-tty-kit";
-            lispDependencies = [ codecKit ];
+            lispDependencies = [
+              codecKit
+              concurrentKit
+            ];
           })
           (ctx.cl.lispDerivation {
             pname = "cl-cli";
@@ -175,14 +212,12 @@
         })
       ];
 
-      # The delivered `cl-sl` binary: packages.default, apps.default, and
-      # apps.cl-sl, all built from the :build-operation / :build-pathname /
-      # :entry-point already declared in cl-sl.asd -- nothing here repeats
-      # them. installSource lets the delivered binary find its own installed
-      # ASDF sources when it needs to re-resolve itself; see cl-weave/flake.nix,
-      # whose comment on this option this follows.
+      # The delivered binary is owned by the separate CL-SL/CLI ASDF system.
+      # installSource lets it find its installed source tree if ASDF needs to
+      # re-resolve the system at runtime.
       executable = {
         installSource = true;
+        lispSystem = "cl-sl/cli";
       };
 
       docs.root = ./docs;
@@ -206,41 +241,38 @@
             name = "cl-sl-paredit-lint";
           };
 
-          # An sb-cover HTML coverage report for src/, as a buildable
-          # artifact rather than a pass/fail gate: `nix build
-          # .#checks.<system>.coverage --no-link --print-out-paths` prints a
-          # store path whose cover-index.html is the report to open. No
-          # minimum-coverage threshold -- see cl-nix-forge's
-          # lib/batteries/coverage.nix for why one would gate on the wrong
-          # thing here. Verified by hand against this repository specifically
-          # (not merely assumed), line by line in the generated report:
-          #
-          # - art-train-data.lisp's raw expression score is misleadingly low
-          #   because sb-cover under-attributes the string literals inside a
-          #   %DEFINE-TRAIN-VARIANT/DEFPARAMETER data form, even though every
-          #   variant IS exercised (t/art-train-test.lisp asserts on each
-          #   one's resulting dimensions).
-          # - app.lisp's real-IO surface is deliberately split as narrowly as
-          #   cl-tty-kit's own WITH-RAW-MODE allows: %RUN-LOOP holds the
-          #   entire poll/advance/render/quit TICK-LOOP-RUN-REALTIME
-          #   composition and is fully exercised in t/app-test.lisp against a
-          #   STRING-OUTPUT-STREAM/STRING-INPUT-STREAM pair, no real terminal
-          #   needed. Only RUN's own body -- constructing WORLD/RENDERER and
-          #   the WITH-RAW-MODE/WITH-TERMINAL-SESSION wrapper around
-          #   %RUN-LOOP -- is untested, because WITH-RAW-MODE's body does not
-          #   even run when FD 0 is not a real controlling terminal (see its
-          #   docstring: "when supported"), so unit-testing it would mean
-          #   either a fake pty (testing a mock, not RUN) or a flaky
-          #   dependency on CI granting a real tty.
-          # - cli.lisp is the same story one layer up: %RESOLVE-RUN-ARGS (all
-          #   of %RUN-HANDLER's actual logic) is fully tested; only
-          #   %RUN-HANDLER's call into RUN, MAIN, and IMAGE-ENTRY-POINT
-          #   remain untested, for the same reason plus MAIN/IMAGE-ENTRY-
-          #   POINT being process-exit code (UIOP:QUIT) a test process cannot
-          #   call into without terminating itself.
+          # An sb-cover HTML coverage report for the library and CLI systems.
+          # The entry point below runs the registered suite through
+          # cl-weave's public coverage API and fails unless both expression
+          # and branch coverage reach 100%. The excluded files contain
+          # static art data, declarations, or process/terminal boundaries;
+          # SB-COVER counts their literal/declaration forms as executable
+          # expressions without representing runtime behavior.
           coverage = ctx.cl.mkCoverageReport {
             drv = ctx.package;
-            systems = [ "cl-sl" ];
+            systems = [
+              "cl-sl"
+              "cl-sl/cli"
+            ];
+            entryPointText = ''
+              (require "asdf")
+              (pushnew :cl-sl-coverage *features*)
+              (asdf:load-system "cl-sl/test")
+              (uiop:symbol-call
+               :cl-sl/test
+               :run-tests
+               :coverage-minimum-expression 100
+               :coverage-minimum-branch 100
+               :coverage-exclude-pathnames
+               '("src/art-train-data.lisp"
+                 "src/package.lisp"
+                 "src/conditions.lisp"
+                 "src/constants.lisp"
+                 "src/state.lisp"
+                 "src/terminal.lisp"
+                 "src/cli-package.lisp"
+                 "src/cli-entry-point.lisp"))
+            '';
             name = "cl-sl-coverage";
             timeoutSeconds = 900;
           };

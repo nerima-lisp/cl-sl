@@ -6,7 +6,7 @@
   (map 'list (lambda (frame) (multiple-value-list (cl-sl::sprite-dimensions frame))) frames))
 
 (describe "train art frame tables"
-  (it-each ((:normal) (:little) (:fly))
+  (it-each ((:normal) (:little) (:c51) (:fly))
       "every frame of the ~A variant shares one (width, height)"
       (variant)
     (let* ((frames (cl-sl::%train-frames variant))
@@ -24,6 +24,6 @@
       (expect (cl-sl::splat-art) :to-have-dimensions person-width person-height))))
 
 (describe "%define-train-variant"
-  (it "signals an error at macroexpansion time for a variant not in +train-variants+"
+  (it "signals an error at macroexpansion time for an unknown variant"
     (expect (lambda () (macroexpand-1 '(cl-sl::%define-train-variant :bogus "doc" ("x"))))
             :to-throw 'error)))

@@ -30,6 +30,7 @@ Or, once built, from the command line:
 cl-sl              # the default full-size train
 cl-sl -a           # -a/--accident: a person appears in its path
 cl-sl -l           # -l/--little: a shorter train pulling logs
+cl-sl -c           # -c/--c51: the C51 steam locomotive
 cl-sl -F           # -F/--fly: the train's height oscillates as it crosses
 cl-sl --fps 30
 ```
@@ -65,7 +66,7 @@ binary, not the ASDF system.
 - [Getting started](https://nerima-lisp.github.io/cl-sl/getting-started/)
 - [API reference](https://nerima-lisp.github.io/cl-sl/reference/api/)
 - [Architecture](https://nerima-lisp.github.io/cl-sl/reference/architecture/) --
-  the TRAIN/WORLD split and how the -a/-l/-F variants compose
+  the TRAIN/WORLD split and how the -a/-l/-c/-F variants compose
 
 ## Development
 
@@ -73,27 +74,33 @@ binary, not the ASDF system.
 nix develop          # SBCL with CL_SOURCE_REGISTRY already set
 nix build            # -> ./result/bin/cl-sl
 nix run .#test       # run the test suite
-nix flake check      # tests + formatting + docs + paredit lint, the same gate CI uses
+nix flake check      # tests + formatting + docs + paredit lint,
+                     # the same gate CI uses
 nix fmt              # format Nix sources (treefmt)
-nix build .#checks.x86_64-linux.coverage --no-link --print-out-paths
+system=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+nix build ".#checks.$system.coverage" --no-link --print-out-paths
                      # sb-cover HTML report for src/; open cover-index.html
-                     # from the printed path. No pass/fail threshold -- see
-                     # flake.nix.
+                     # from the printed path. The check enforces 100% expression
+                     # and branch coverage for measured behavior.
 ```
 
 Tests live in `t/` and run under [cl-weave](https://github.com/nerima-lisp/cl-weave),
 the org's test framework. `nix flake check` additionally runs
 [paredit-cli](https://github.com/nerima-lisp/paredit-cli)'s structural lint
-over every Lisp source file.
+over every Lisp source file. The coverage check excludes declaration/data files
+and the real-terminal/CLI boundary explicitly in `flake.nix`; those boundaries
+are verified by focused tests instead.
 
 ## Contributing
 
-See the org-wide [CONTRIBUTING](https://github.com/nerima-lisp/.github/blob/main/CONTRIBUTING.md)
-guide and the [package standard](https://github.com/nerima-lisp/.github/blob/main/PACKAGE_STANDARD.md).
+Open a [GitHub issue](https://github.com/nerima-lisp/cl-sl/issues) for a bug
+report or feature proposal. Changes should keep `nix flake check` green and
+include focused tests for behavior changes.
 
 ## Support
 
-See [SUPPORT](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md).
+Use the [GitHub issue tracker](https://github.com/nerima-lisp/cl-sl/issues) for
+usage questions and reproducible problems.
 
 ## License
 

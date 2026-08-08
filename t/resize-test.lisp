@@ -21,7 +21,9 @@
     (let* ((world (tiny-world :width 40 :height 20))
            (train (world-train world)))
       (world-resize world 40 8)
-      (expect (= (train-baseline-y train world) (- 8 (train-height train))) :to-be-truthy)))
+      (expect (= (train-baseline-y train world)
+                 (- (floor (world-height world) 2) 5))
+              :to-be-truthy)))
   (it "continues advancing normally after a mid-run resize"
     (let* ((world (tiny-world :width 40 :height 20 :speed -2.0))
            (train (world-train world)))

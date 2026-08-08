@@ -82,3 +82,26 @@ TIMEOUT), both ignored -- that always returns VALUES."
         ;; slow-crossing train would exit on its own -- proves the queued
         ;; input actually drove the stop, not an unrelated train-exited-p.
         (expect (< (world-tick world) 5) :to-be-truthy)))))
+
+(describe "run"
+  (it "passes its simulation through an injectable terminal boundary"
+    (let ((output (make-string-output-stream))
+          (input (make-string-input-stream "q"))
+          (boundary-stream nil)
+          (boundary-entered-p nil)
+          (final-world nil))
+      (setf final-world
+            (cl-sl:run :width 200 :height 10
+                       :stream output
+                       :input-stream input
+                       :fps 1000
+                       :run-boundary-function
+                       (lambda (stream continuation)
+                         (setf boundary-stream stream
+                               boundary-entered-p t)
+                         (funcall continuation stream))))
+      (with-soft-assertions
+        (expect boundary-entered-p :to-be-truthy)
+        (expect boundary-stream :to-be output)
+        (expect (world-quit-requested final-world) :to-be-truthy)
+        (expect (plusp (length (get-output-stream-string output))) :to-be-truthy)))))

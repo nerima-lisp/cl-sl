@@ -1,9 +1,9 @@
 ;;;; src/art-train.lisp -- the frame-table engine shared by every train
 ;;;; variant: normalizing raw multi-line sprite text into a dimension-
-;;;; consistent frame vector, and %DEFINE-TRAIN-VARIANT, the macro that runs a
-;;;; variant's raw art (src/art-train-data.lisp) through that normalization
-;;;; and registers the result into *TRAIN-VARIANT-FRAMES* for %TRAIN-FRAMES to
-;;;; look up.
+;;;; consistent frame vector, and %DEFINE-TRAIN-VARIANT, the macro that turns
+;;;; a variant's raw art (src/art-train-data.lisp) into a named frame vector.
+;;;; %TRAIN-FRAMES is compile-time-generated finite dispatch rather than a
+;;;; mutable runtime registry.
 ;;;;
 ;;;; This file is pure mechanism -- no sprite art lives here; see
 ;;;; art-train-data.lisp for that. NORMALIZE-FRAME-GROUP pads every frame in a
@@ -11,7 +11,6 @@
 ;;;; length mismatch between two frames of the same animation cannot show up
 ;;;; as the sprite changing size mid-motion -- TRAIN-ADVANCE (train.lisp)
 ;;;; relies on every frame of a given variant reporting identical dimensions.
-(in-package #:cl-sl)
 
 (defun %frame-lines (text)
   "Split TEXT on #\\Newline into a list of lines, mirroring cl-tty-kit's own
@@ -60,23 +59,21 @@ column alignment."
              line-lists)
      'simple-vector)))
 
-;;; +TRAIN-VARIANTS+ must be bound while %DEFINE-TRAIN-VARIANT expands the
-;;; forms below it, not only once this file's fasl is later loaded -- a plain
-;;; DEFPARAMETER's value is a load-time effect under COMPILE-FILE, invisible
-;;; to macroexpansion happening later in the very same compilation. Wrapping
-;;; it in EVAL-WHEN makes the value a compile-time effect too, so the
-;;; membership check inside the macro below sees real data instead of an
-;;; unbound variable.
+;;; TRAIN-VARIANTS must be available while %DEFINE-TRAIN-VARIANT expands the
+;;; forms below it. The finite set lives in one macro so adding a variant
+;;; requires changing this declaration and recompiling the generated dispatch.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter +train-variants+ '(:normal :little :fly)
-    "The recognized TRAIN-VARIANT keywords; every other value MAKE-TRAIN sees
-signals UNKNOWN-VARIANT."))
+  (defmacro train-variants ()
+    "Expand to a quoted list of recognized TRAIN-VARIANT keywords.
 
-(defvar *train-variant-frames* (make-hash-table :test #'eq)
-  "Maps each keyword in +TRAIN-VARIANTS+ to its frame-table SIMPLE-VECTOR.
-Populated by %DEFINE-TRAIN-VARIANT below; %TRAIN-FRAMES reads it instead of a
-hand-written CASE, so a variant declared here cannot silently go missing from
-dispatch the way a forgotten CASE clause could.")
+The returned list is compile-time data, not a mutable runtime registry."
+    '(quote (:normal :little :c51 :fly)))
+  (defun %known-train-variant-p (variant)
+    "Return true when VARIANT names one of the compiled train variants."
+    (case variant
+      ((:normal :little :c51 :fly) t)
+      (otherwise nil)))
+  (defun %train-frames-symbol (variant) "Return the generated frame-vector symbol for VARIANT." (ecase variant (:normal (quote +train-frames-normal+)) (:little (quote +train-frames-little+)) (:c51 (quote +train-frames-c51+)) (:fly (quote +train-frames-fly+)))))
 
 (defun %join-lines (&rest lines)
   "Join LINES with #\\Newline between them. Each line is a complete string
@@ -92,24 +89,27 @@ self-consistent frame."
 (defmacro %define-train-variant (variant documentation &body frames)
   "Define +TRAIN-FRAMES-<VARIANT>+ from FRAMES (each a list of line-string
 forms, one element per animation frame, passed to %JOIN-LINES) via
-NORMALIZE-FRAME-GROUP, and register the result into *TRAIN-VARIANT-FRAMES*
-under VARIANT for %TRAIN-FRAMES to look up. VARIANT must already be a member
-of +TRAIN-VARIANTS+ -- checked here, at macroexpansion time, so a typo'd or
-not-yet-declared variant is a compile error pointing at this form, rather
-than a run-time UNKNOWN-VARIANT pointing at whichever caller first hit the
-gap."
-  (unless (member variant +train-variants+)
-    (error "%DEFINE-TRAIN-VARIANT: ~S is not a member of +TRAIN-VARIANTS+." variant))
-  (let ((frames-name (intern (format nil "+TRAIN-FRAMES-~A+" (symbol-name variant)))))
-    `(progn
-       (defparameter ,frames-name
-         (normalize-frame-group (list ,@(mapcar (lambda (frame) `(%join-lines ,@frame)) frames)))
-         ,documentation)
-       (setf (gethash ,variant *train-variant-frames*) ,frames-name)
-       ',frames-name)))
+NORMALIZE-FRAME-GROUP. VARIANT must already be a member of TRAIN-VARIANTS
+-- checked here, at macroexpansion time, so a typo'd or not-yet-declared
+variant is a compile error pointing at this form rather than a run-time
+UNKNOWN-VARIANT pointing at whichever caller first hit the gap."
+  (unless (%known-train-variant-p variant)
+    (error "%DEFINE-TRAIN-VARIANT: ~S is not a member of TRAIN-VARIANTS." variant))
+  (let ((frames-name (%train-frames-symbol variant)))
+    `(defparameter ,frames-name
+       (normalize-frame-group (list ,@(mapcar (lambda (frame) `(%join-lines ,@frame)) frames)))
+       ,documentation)))
 
-(defun %train-frames (variant)
-  "Return the frame vector for TRAIN-VARIANT, signaling UNKNOWN-VARIANT for
-anything not in +TRAIN-VARIANTS+."
-  (or (gethash variant *train-variant-frames*)
-      (error 'unknown-variant :name variant)))
+(defmacro %train-frames (variant)
+  "Expand to finite CASE dispatch for TRAIN-VARIANT.
+
+The generated branch names are symbols emitted by %DEFINE-TRAIN-VARIANT, so
+there is no mutable registry to initialize or accidentally desynchronize."
+  (let ((variant-var (gensym "VARIANT")))
+    `(let ((,variant-var ,variant))
+       (case ,variant-var
+         (:normal +train-frames-normal+)
+         (:little +train-frames-little+)
+         (:c51 +train-frames-c51+)
+         (:fly +train-frames-fly+)
+         (otherwise (error 'unknown-variant :name ,variant-var))))))

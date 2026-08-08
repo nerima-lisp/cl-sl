@@ -1,16 +1,14 @@
-;;;; src/app.lisp -- the thin real-IO loop, kept separate from the pure
-;;;; WORLD-ADVANCE state transition (world.lisp) per the split
-;;;; examples/renderer-loop.lisp and examples/event-loop.lisp establish in
-;;;; cl-tty-kit: everything below does real terminal I/O and calls
-;;;; TICK-LOOP-RUN-REALTIME; nothing in train.lisp, world.lisp, or
-;;;; collision.lisp does.
+;;;; src/app.lisp -- pure realtime-loop composition around the simulation.
+;;;;
+;;;; Terminal setup lives in terminal.lisp. The callbacks below keep the
+;;;; terminal library behind injectable polling and rendering boundaries, so
+;;;; this file can be exercised with streams and closures in t/app-test.lisp.
 ;;;;
 ;;;; Resize and key-input polling are cl-tty-kit's own MAKE-TERMINAL-SIZE-
 ;;;; POLLER / MAKE-STREAM-INPUT-POLLER (v1.4.0+): both RESIZE-POLL and
 ;;;; INPUT-POLL below are one of those, injected rather than constructed
 ;;;; inline, so %APPLY-RESIZE and %MAKE-POLL are exercised in t/app-test.lisp
 ;;;; with plain stub closures instead of a real terminal.
-(in-package #:cl-sl)
 
 (defun %apply-resize (world renderer resize-poll)
   "Resize WORLD and RENDERER to the size RESIZE-POLL reports for WORLD, when
@@ -36,7 +34,7 @@ POLL's result flows straight into it as this tick's starting state."
     (%apply-resize world renderer resize-poll)
     (world-apply-key-events world (funcall input-poll world 0))))
 
-(defun %run-loop (world renderer output-stream input-stream fps)
+(defun %run-loop (world renderer output-stream input-stream fps &optional render-cache)
   "Run TICK-LOOP-RUN-REALTIME to completion for WORLD/RENDERER: write frames
 to OUTPUT-STREAM, poll INPUT-STREAM and the terminal size via %MAKE-POLL, at
 FPS frames per second, until WORLD-QUITP. Returns the final WORLD.
@@ -51,24 +49,11 @@ even run when FD 0 is not one (see its docstring: \"when supported\")."
   (tick-loop-run-realtime
    world
    #'world-advance
-   (lambda (state) (render-frame renderer state))
+   (lambda (state)
+     (unless (train-exited-p (world-train state) state)
+       (render-frame renderer state render-cache)))
    #'world-quitp
    :stream output-stream
    :interval (/ 1 fps)
    :poll (%make-poll renderer (make-terminal-size-poller)
                       (make-stream-input-poller input-stream))))
-
-(defun run (&key (width +default-width+) (height +default-height+)
-            accident-p little-p fly-p (fps 20) (stream *standard-output*))
-  "Run the locomotive across the real terminal until it fully scrolls off the
-left edge, or `q' is pressed early. WIDTH and HEIGHT size the initial WORLD (a
-resize is then picked up automatically, see %MAKE-POLL); ACCIDENT-P,
-LITTLE-P and FLY-P select the -a/-l/-F variants (see MAKE-WORLD); FPS is the
-target frames per second, forwarded to cl-tty-kit:TICK-LOOP-RUN-REALTIME as
-an interval."
-  (let ((world (make-world :width width :height height
-                            :accident-p accident-p :little-p little-p :fly-p fly-p))
-        (renderer (make-renderer width height)))
-    (with-raw-mode ()
-      (with-terminal-session (session-stream :stream stream :hide-cursor t :alternate-screen t)
-        (%run-loop world renderer session-stream *standard-input* fps)))))

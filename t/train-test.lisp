@@ -6,8 +6,10 @@
     (expect (lambda () (make-train :variant :nonexistent)) :to-throw 'unknown-variant))
   (it "defaults to the :normal variant at x 0.0"
     (let ((train (make-train)))
-      (expect (train-variant train) :to-be :normal)
-      (expect (= (train-x train) 0.0) :to-be-truthy))))
+      (with-soft-assertions
+        (expect (train-variant train) :to-be :normal)
+        (expect (train-x train) :to-be 0.0)
+        (expect (train-dx train) :to-be -2.0)))))
 
 (describe "train-advance"
   (it "moves x by dx each tick"
@@ -30,20 +32,24 @@
       (expect (= (train-dx train) -2.0) :to-be-truthy)
       (train-advance train)
       (expect (= (train-x train) 8.0) :to-be-truthy)))
-  (it "advances the animation frame every +frame-period+ ticks, looping"
-    (let ((train (make-train :x 0.0 :dx 0.0)))
-      (expect (train-frame-index train) :to-be 0)
-      (dotimes (i (1- cl-sl::+frame-period+)) (train-advance train))
-      (expect (train-frame-index train) :to-be 0)
+  (it "derives the D51 animation frame from the canonical x coordinate"
+    (let ((train (make-train :x 83.0 :dx -1.0)))
+      (expect (train-frame-index train) :to-be 4)
       (train-advance train)
-      (expect (train-frame-index train) :to-be 1)))
+      (expect (train-frame-index train) :to-be 3)))
   (it "counts fly-tick only for the :fly variant"
     (let ((fly-train (make-train :x 0.0 :dx 0.0 :variant :fly))
           (normal-train (make-train :x 0.0 :dx 0.0 :variant :normal)))
       (train-advance fly-train)
       (train-advance normal-train)
       (expect (train-fly-tick fly-train) :to-be 1)
-      (expect (train-fly-tick normal-train) :to-be 0))))
+      (expect (train-fly-tick normal-train) :to-be 0)))
+  (it "keeps a single-frame animation stable"
+    (multiple-value-bind (frame-index frame-timer)
+        (cl-sl::%advance-frame-state 2 1 1)
+      (with-soft-assertions
+        (expect frame-index :to-be 2)
+        (expect frame-timer :to-be 1)))))
 
 (describe "train-exited-p"
   (it "is false while any part of the train is still on screen"
