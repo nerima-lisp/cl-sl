@@ -39,10 +39,24 @@
 
 (in-package #:cl-sl/test)
 
-(defun run-tests ()
+(defun run-tests (&key
+                    (coverage-minimum-expression nil expression-supplied-p)
+                    (coverage-minimum-branch nil branch-supplied-p)
+                    coverage-exclude-pathnames)
   "Run every registered spec, signalling on any failure so ASDF's TEST-OP
-fails."
-  (unless (run-all :reporter :spec)
-    (error "cl-sl test suite failed"))
+fails.  When a coverage threshold is supplied, delegate the gate to
+CL-WEAVE's SB-COVER integration."
+  (let ((coverage-p
+          (or expression-supplied-p
+              branch-supplied-p
+              (not (null coverage-exclude-pathnames)))))
+    (unless (run-all
+             :reporter :spec
+             :coverage coverage-p
+             :coverage-minimum-expression coverage-minimum-expression
+             :coverage-minimum-branch coverage-minimum-branch
+             :coverage-exclude-pathnames coverage-exclude-pathnames
+             :coverage-reset nil)
+      (error "cl-sl test suite failed")))
   (format t "~&cl-sl/test: successful completion with 0 failures~%")
   t)

@@ -1,6 +1,6 @@
 ;;;; t/helpers-world.lisp -- shared test fixtures. Not a test file itself
 ;;;; (hence the `helpers-' prefix rather than `-test'); see
-;;;; CODING_STANDARD.md "テスト補助ファイルは helpers- で始める".
+;;;; docs/src/project/development.md for the test layout.
 (in-package #:cl-sl/test)
 
 (defun tiny-world (&key (width 20) (height 10) accident-p little-p fly-p (speed -2.0))

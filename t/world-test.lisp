@@ -43,7 +43,7 @@
       ((width (gen-integer :min 5 :max 200))
        (height (gen-integer :min 3 :max 60))
        (ticks (gen-integer :min 1 :max 80))
-       (variant (gen-member +train-variants+))
+       (variant (gen-member (train-variants)))
        (accident-p (gen-boolean))
        (speed (gen-integer :min -6 :max -1)))
       (:trials 40 :timeout-per-trial 2)

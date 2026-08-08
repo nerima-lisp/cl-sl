@@ -1,13 +1,9 @@
 ;;;; t/cli-test.lisp
 ;;;;
-;;;; Flag parsing, plus %RESOLVE-RUN-ARGS (the pure width/height/fps
-;;;; resolution %RUN-HANDLER performs before calling RUN). %RUN-HANDLER and
-;;;; RUN itself are not tested here: RUN (src/app.lisp) takes over a real
-;;;; terminal in raw mode via a realtime tick loop that only returns once the
-;;;; train exits or `q' is pressed -- unlike a one-shot print command, there
-;;;; is no way to invoke it under a test runner and get control back, so
-;;;; these tests never call RUN-APP without --help or --version, which
-;;;; return before the handler runs.
+;;;; Flag parsing, argument resolution, and the injected CLI execution seams.
+;;;; The real terminal loop remains in src/terminal.lisp; these tests exercise the
+;;;; command policy without binding the test runner to a terminal or process
+;;;; exit.
 (in-package #:cl-sl/test)
 
 (describe "the cl-sl app spec: flag parsing round-trips"
@@ -88,9 +84,9 @@
         (expect (getf args :width) :to-be +default-width+)
         (expect (getf args :height) :to-be +default-height+))))
 
-  (it "defaults --fps to 20 when not given"
+  (it "defaults --fps to +default-fps+ when not given"
     (expect (getf (cl-sl/cli::%resolve-run-args (parse-argv (make-sl-app) '("cl-sl")) 80 24) :fps)
-            :to-be 20))
+            :to-be +default-fps+))
 
   (it "carries the parsed --fps through instead of the default"
     (let ((invocation (parse-argv (make-sl-app) '("cl-sl" "--fps" "30"))))
@@ -103,3 +99,48 @@
         (expect (getf args :accident-p) :to-be-truthy)
         (expect (getf args :little-p) :to-be-truthy)
         (expect (getf args :fly-p) :to-be-truthy)))))
+
+(describe "%run-handler"
+  (it "passes resolved arguments to the injected runner and returns success"
+    (let ((run-args nil)
+          (invocation (parse-argv (make-sl-app) '("cl-sl" "-a" "--fps" "30"))))
+      (expect (cl-sl/cli::%run-handler
+                invocation
+                (lambda (&rest args)
+                  (setf run-args args))
+                (lambda () (values 120 40)))
+              :to-be 0)
+      (with-soft-assertions
+        (expect (getf run-args :width) :to-be 120)
+        (expect (getf run-args :height) :to-be 40)
+        (expect (getf run-args :fps) :to-be 30)
+        (expect (getf run-args :accident-p) :to-be-truthy)))))
+
+(describe "main and image-entry-point"
+  (it "hands an explicit argv to the injected app runner and quitter"
+    (let ((received-argv nil)
+          (quit-code nil))
+      (expect (cl-sl/cli::main
+                :argv '("cl-sl" "--help")
+                :run-app-function
+                (lambda (app &key argv)
+                  (declare (ignore app))
+                  (setf received-argv argv)
+                  7)
+                :quit-function (lambda (code)
+                                 (setf quit-code code)
+                                 code))
+              :to-be 7)
+      (with-soft-assertions
+        (expect received-argv :to-be '("cl-sl" "--help"))
+        (expect quit-code :to-be 7))))
+
+  (it "initializes delivery state before delegating to the injected main"
+    (let ((*default-pathname-defaults* *default-pathname-defaults*)
+          (called nil))
+      (expect (cl-sl/cli::image-entry-point
+                :main-function (lambda ()
+                                 (setf called t)
+                                 :ok))
+              :to-be :ok)
+      (expect called :to-be-truthy))))

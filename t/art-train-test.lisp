@@ -24,6 +24,6 @@
       (expect (cl-sl::splat-art) :to-have-dimensions person-width person-height))))
 
 (describe "%define-train-variant"
-  (it "signals an error at macroexpansion time for a variant not in +train-variants+"
+  (it "signals an error at macroexpansion time for an unknown variant"
     (expect (lambda () (macroexpand-1 '(cl-sl::%define-train-variant :bogus "doc" ("x"))))
             :to-throw 'error)))

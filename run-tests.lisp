@@ -7,7 +7,7 @@
 ;;;; Registers this checkout on ASDF's source registry, inherits the caller's
 ;;;; configuration for sibling dependencies (cl-tty-kit, cl-cli, cl-weave --
 ;;;; set CL_SOURCE_REGISTRY to the nerima-lisp checkout root so ASDF can find
-;;;; them), and runs the test system. See PACKAGE_STANDARD.md.
+;;;; them), and runs the test system. See docs/src/project/development.md.
 
 (require :asdf)
 

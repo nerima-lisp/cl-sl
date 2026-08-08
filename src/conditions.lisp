@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Every condition this package signals derives from SL-ERROR, so a caller
 ;;;; can catch all of them with one HANDLER-CASE clause. See
-;;;; CODING_STANDARD.md "コンディションの設計".
+;;;; docs/src/reference/conditions.md for the hierarchy.
 (in-package #:cl-sl)
 
 (define-condition sl-error (error) ()
@@ -23,4 +23,4 @@ non-positive width or height."))
   (:report (lambda (condition stream)
              (format stream "Unknown train variant ~S." (unknown-variant-name condition))))
   (:documentation "Signaled when MAKE-TRAIN is asked for a variant keyword not
-present in +TRAIN-VARIANTS+."))
+listed by the TRAIN-VARIANTS macro."))

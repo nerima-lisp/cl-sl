@@ -1,7 +1,6 @@
 ;;;; t/helpers-matchers.lisp -- domain-specific cl-weave matchers for cl-sl's
 ;;;; own tests. Not a test file itself (hence the `helpers-' prefix rather
-;;;; than `-test'); see CODING_STANDARD.md "テスト補助ファイルは helpers- で
-;;;; 始める".
+;;;; than `-test'); see docs/src/project/development.md for the test layout.
 ;;;;
 ;;;; Registering DEFMATCHER lets a sprite-dimension comparison read in the
 ;;;; domain's own vocabulary -- "this frame has these dimensions" -- instead
