@@ -21,16 +21,21 @@ CLI remain separate packages.
   macro. The macro normalizes raw multi-line sprite text and emits a named
   frame vector; `%train-frames` uses a finite generated `case` for dispatch.
   No sprite art lives in this file.
-- `src/art-train-data.lisp` -- the sprite data itself: each variant is a
-  `%define-train-variant` form, plus the accident sprite's standing/splat pair.
-  Adding a variant adds one data declaration and its generated dispatch entry.
+- `src/art-train-data.lisp` -- the canonical sprite data from `sl.c`: D51,
+  LOGO, and C51 train art, smoke particle tables, and the accident-person/splat
+  pair. Each variant is prepared into frame vectors by `%canonical-train-frame`.
+- `src/render-cache.lisp` -- immutable sprite preparation for the render hot
+  path. `make-render-cache` precomputes span geometry for all static sprites
+  with a bounded `cl-concurrent-kit` worker pool so subsequent frames only
+  clear old sprite regions.
 - `src/train.lisp` -- the pure `train-advance` transition.
 - `src/world.lisp` -- pure world transitions: `world-advance`,
   `world-apply-key-event(s)`, and `world-quitp`.
 - `src/collision.lisp` -- the collision policy for the train and `-a` accident
   sprite.
-- `src/render.lisp` -- painting a `world` onto a `cl-tty-kit` `screen`; clear
-  and sprite blits are coalesced with `cl-tty-kit:with-screen-batch`.
+- `src/render.lisp` -- painting a `world` onto a `cl-tty-kit` `screen`;
+  supports both a full-repaint path and an incremental cached path that
+  clears only previous sprite bounding rectangles.
 - `src/app.lisp` -- the CPS-composed real-time loop and its direct
   `cl-tty-kit` resize/input pollers. It owns no alternate implementations of
   those pollers.

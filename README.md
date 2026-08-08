@@ -4,13 +4,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-0a7a5a)](https://nerima-lisp.github.io/cl-sl/)
 
-An original reimplementation of the classic Unix joke command `sl` (Steam
-Locomotive): mistype `ls` as `sl` and, instead of a shell error, an original
-hand-authored steam locomotive runs across the terminal and exits
-automatically once it scrolls off screen, rendered live via
-[cl-tty-kit](https://github.com/nerima-lisp/cl-tty-kit). Every sprite here is
-original art authored for this repository -- none of it is copied or
-transcribed from the classic `sl.c` train art. Targets SBCL only.
+A Common Lisp reimplementation of the classic Unix joke command `sl` (Steam
+Locomotive): mistype `ls` as `sl` and, instead of a shell error, a steam
+locomotive runs across the terminal and exits automatically once it scrolls
+off screen, rendered live via
+[cl-tty-kit](https://github.com/nerima-lisp/cl-tty-kit). The train sprites
+are drawn from the canonical `sl.c` art data. Targets SBCL only.
 
 Full documentation is published at <https://nerima-lisp.github.io/cl-sl/>.
 The source for that site lives in [docs/src/](docs/src/).
