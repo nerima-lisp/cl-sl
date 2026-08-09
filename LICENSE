@@ -19,3 +19,22 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+ATTRIBUTION FOR EARLIER REVISIONS
+
+Every locomotive sprite, smoke table, and motion rule in this release was
+authored for this repository. Revisions before v1.0.0, which remain reachable
+in this repository's git history, carried ASCII art transcribed from sl.c and
+sl.h of the SL program:
+
+    Copyright 1993,1998,2014-2015 Toyoda Masashi (mtoyoda@acm.org)
+
+    Everyone is permitted to do anything on this program including copying,
+    modifying, and improving, unless you try to pretend that you wrote it.
+    i.e., the above copyright notice has to appear in all copies.
+    THE AUTHOR DISCLAIMS ANY RESPONSIBILITY WITH REGARD TO THIS SOFTWARE.
+
+Those revisions also described that art as original to this repository, which
+it was not. This notice records the correction and carries the upstream
+copyright notice that those revisions were required to carry and did not.

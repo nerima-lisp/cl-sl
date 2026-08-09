@@ -10,6 +10,15 @@
 ;;;; inline, so %APPLY-RESIZE and %MAKE-POLL are exercised in t/app-test.lisp
 ;;;; with plain stub closures instead of a real terminal.
 
+;;; There is no `(in-package #:cl-sl)' here, and adding one would break the
+;;; build gate rather than fix anything. cl-sl.asd's :around-compile hook binds
+;;; the reader package for every component of this system, so the form would be
+;;; redundant -- and SB-COVER counts it as an executable expression that no test
+;;; can ever exercise, which drops the coverage check below its 100% threshold.
+;;; Declarations, constants, and literal tables belong in a file on flake.nix's
+;;; coverage-exclude-pathnames list for the same reason; those excluded files
+;;; may carry their own in-package.
+
 (defun %apply-resize (world renderer resize-poll)
   "Resize WORLD and RENDERER to the size RESIZE-POLL reports for WORLD, when
 it reports one, returning WORLD. RESIZE-POLL is a MAKE-TERMINAL-SIZE-POLLER
@@ -34,7 +43,7 @@ POLL's result flows straight into it as this tick's starting state."
     (%apply-resize world renderer resize-poll)
     (world-apply-key-events world (funcall input-poll world 0))))
 
-(defun %run-loop (world renderer output-stream input-stream fps &optional render-cache)
+(defun %run-loop (world renderer output-stream input-stream fps)
   "Run TICK-LOOP-RUN-REALTIME to completion for WORLD/RENDERER: write frames
 to OUTPUT-STREAM, poll INPUT-STREAM and the terminal size via %MAKE-POLL, at
 FPS frames per second, until WORLD-QUITP. Returns the final WORLD.
@@ -44,14 +53,16 @@ the callbacks TICK-LOOP-RUN-REALTIME calls back each tick -- so it runs
 against a plain STRING-OUTPUT-STREAM/STRING-INPUT-STREAM and a WORLD small
 enough to quit in a few ticks in t/app-test.lisp, unlike RUN itself, which
 wraps this in WITH-RAW-MODE/WITH-TERMINAL-SESSION and therefore needs a real
-controlling terminal to do anything at all -- WITH-RAW-MODE's body does not
-even run when FD 0 is not one (see its docstring: \"when supported\")."
+controlling terminal to do anything at all. WITH-RAW-MODE does not skip its
+body when FD 0 is not a terminal -- ENABLE-RAW-MODE signals there -- so
+%RUN-BOUNDARY (terminal.lisp) catches that condition and RUN returns without
+ever reaching this function."
   (tick-loop-run-realtime
    world
    #'world-advance
    (lambda (state)
-     (unless (train-exited-p (world-train state) state)
-       (render-frame renderer state render-cache)))
+     (unless (train-exited-p (world-train state))
+       (render-frame renderer state)))
    #'world-quitp
    :stream output-stream
    :interval (/ 1 fps)

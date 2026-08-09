@@ -20,11 +20,8 @@
                 #:screen-width
                 #:screen-height
                 #:screen-clear
-                #:make-cell
-                #:screen-fill-rect
-                #:screen-write-string
-                #:with-screen-batch
                 #:sprite-blit
+                #:with-screen-batch
                 #:make-style
                 #:style-fg
                 #:named-color
@@ -37,6 +34,16 @@
                 #:tick-loop-run-realtime
                 #:with-raw-mode
                 #:with-terminal-session
+                ;; WITH-RAW-MODE does not degrade quietly on a non-terminal FD.
+                ;; Its docstring says "when supported" and its expansion reads
+                ;; `(when (setf enabled (enable-raw-mode fd)) ...)', which looks
+                ;; like a NIL-returning probe -- but ENABLE-RAW-MODE signals
+                ;; RAW-MODE-OPERATION-FAILED instead of returning NIL, so that
+                ;; guard never sees a NIL and the body is not what gets skipped.
+                ;; %RUN-BOUNDARY (terminal.lisp) catches the condition; these
+                ;; two symbols are what it catches and inspects.
+                #:raw-mode-operation-failed
+                #:raw-mode-operation-failed-operation
                 #:terminal-size
                 #:make-stream-input-poller
                 #:make-terminal-size-poller
@@ -63,13 +70,9 @@
    #:train-variant
    #:train-fly-p
    #:train-frame-index
-   #:train-collision-state
-   #:train-collision-ttl
-   #:train-fly-tick
    #:train-art
    #:train-width
    #:train-height
-   #:train-baseline-y
    #:train-y
    #:train-exited-p
    #:train-advance
@@ -90,18 +93,12 @@
    #:smoke-puff-stage
    #:smoke-puff-kind
    #:world-smoke-puffs
-   #:world-person-x
-   #:world-person-struck-p
    #:world-quit-requested
    #:world-quitp
    #:world-resize
 
    ;; -- Simulation step --
    #:world-advance
-
-   ;; -- Collision (the accident sprite) --
-   #:train-strikes-person-p
-   #:apply-collision
 
    ;; -- Input --
    #:world-apply-key-event

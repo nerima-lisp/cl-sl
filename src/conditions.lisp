@@ -22,5 +22,8 @@ non-positive width or height."))
   ((name :initarg :name :reader unknown-variant-name))
   (:report (lambda (condition stream)
              (format stream "Unknown train variant ~S." (unknown-variant-name condition))))
-  (:documentation "Signaled when MAKE-TRAIN is asked for a variant keyword not
-listed by the TRAIN-VARIANTS macro."))
+  (:documentation "Signaled for a variant keyword the TRAIN-VARIANTS function
+does not list. Three call sites raise it: MAKE-TRAIN (train.lisp), which
+rejects the keyword before any table lookup happens, and the two table readers
+%TRAIN-FRAMES and %VARIANT-GEOMETRY (art-access.lisp), which production never
+reaches for exactly that reason."))

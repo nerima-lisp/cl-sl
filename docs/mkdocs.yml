@@ -51,6 +51,7 @@ nav:
       - Conditions: reference/conditions.md
   - Project:
       - Roadmap: project/roadmap.md
+      - Migrating to v1.0.0: project/migration-v1.md
       - Development: project/development.md
 
 not_in_nav: |

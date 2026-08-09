@@ -1,16 +1,86 @@
-;;;; src/art-train.lisp -- the frame-table engine shared by every train
-;;;; variant: normalizing raw multi-line sprite text into a dimension-
-;;;; consistent frame vector, and %DEFINE-TRAIN-VARIANT, the macro that turns
-;;;; a variant's raw art (src/art-train-data.lisp) into a named frame vector.
-;;;; %TRAIN-FRAMES is compile-time-generated finite dispatch rather than a
-;;;; mutable runtime registry.
+;;;; src/art-train.lisp -- the frame-table engine: the character canvas the
+;;;; sprites are composited onto, and turning raw multi-line sprite text into
+;;;; a dimension-consistent frame vector.
 ;;;;
-;;;; This file is pure mechanism -- no sprite art lives here; see
-;;;; art-train-data.lisp for that. NORMALIZE-FRAME-GROUP pads every frame in a
-;;;; group to the group's own maximum width and height, so a hand-authored
-;;;; length mismatch between two frames of the same animation cannot show up
-;;;; as the sprite changing size mid-motion -- TRAIN-ADVANCE (train.lisp)
-;;;; relies on every frame of a given variant reporting identical dimensions.
+;;;; This file is pure mechanism. No sprite art lives here (see
+;;;; art-train-data.lisp), and neither does any knowledge of which train
+;;;; variants exist -- variant dispatch and the errors it can raise live in
+;;;; art-access.lisp, a coverage-measured file. Nothing below branches on a
+;;;; variant keyword.
+;;;;
+;;;; The canvas painters used to sit in art-train-data.lisp beside the art
+;;;; they compose. They are here instead because that file is excluded from
+;;;; the coverage gate (flake.nix) as a declaration-and-literal-table file,
+;;;; and %PAINT-LINE is neither: it is two guards' worth of clipping logic,
+;;;; and the current art happens to fit its canvas exactly, so half of that
+;;;; clipping is unreachable from the art tables alone. Sitting here it is
+;;;; measured, and t/art-train-test.lisp calls it directly with out-of-range
+;;;; coordinates to reach the branches the art never takes.
+;;;;
+;;;; NORMALIZE-FRAME-GROUP pads every frame in a group to the group's own
+;;;; maximum width and height, so a hand-authored length mismatch between two
+;;;; frames of the same animation cannot show up as the sprite changing size
+;;;; mid-motion -- TRAIN-WIDTH/TRAIN-HEIGHT (train.lisp) derive their answer
+;;;; from whichever frame is current and rely on every frame of a given
+;;;; variant reporting identical dimensions.
+
+;;; There is no `(in-package #:cl-sl)' here, and adding one would break the
+;;; build gate rather than fix anything. cl-sl.asd's :around-compile hook binds
+;;; the reader package for every component of this system, so the form would be
+;;; redundant -- and SB-COVER counts it as an executable expression that no test
+;;; can ever exercise, which drops the coverage check below its 100% threshold.
+;;; Declarations, constants, and literal tables belong in a file on flake.nix's
+;;; coverage-exclude-pathnames list for the same reason; those excluded files
+;;; may carry their own in-package.
+
+;;; ---------------------------------------------------------------- canvas
+
+(defun %blank-canvas (width height)
+  "Return a HEIGHT x WIDTH character array filled with spaces."
+  (make-array (list height width) :element-type 'character :initial-element #\Space))
+
+(defun %paint-line (canvas line x y)
+  "Paint LINE onto CANVAS with its first character at column X of row Y,
+clipping anything that falls outside the canvas. Spaces in LINE overwrite, so
+a later layer can blank out part of an earlier one."
+  (destructuring-bind (height width) (array-dimensions canvas)
+    (when (and (<= 0 y) (< y height))
+      (loop for index from 0 below (length line)
+            for column = (+ x index)
+            when (and (<= 0 column) (< column width))
+              do (setf (aref canvas y column) (char line index)))))
+  canvas)
+
+(defun %paint-block (canvas lines x y)
+  "Paint LINES, a list of strings, onto CANVAS as consecutive rows starting at
+column X of row Y."
+  (loop for line in lines
+        for row from y
+        do (%paint-line canvas line x row))
+  canvas)
+
+(defun %canvas-text (canvas)
+  "Return CANVAS as a newline-joined rectangular string."
+  (destructuring-bind (height width) (array-dimensions canvas)
+    (format nil "~{~A~^~%~}"
+            (loop for row below height
+                  collect (let ((line (make-string width)))
+                            (dotimes (column width line)
+                              (setf (char line column) (aref canvas row column))))))))
+
+;;; ------------------------------------------------------------ rod phases
+
+(defun %rod-row-offset (table phase)
+  "Return the crank-pin row offset TABLE gives for PHASE, cycling over its six
+entries. TABLE is one of the +ROD-PHASES-*+ vectors in art-train-data.lisp."
+  (car (aref table (mod phase 6))))
+
+(defun %rod-column-offset (table phase)
+  "Return the crank-pin column offset TABLE gives for PHASE. See
+%ROD-ROW-OFFSET."
+  (cdr (aref table (mod phase 6))))
+
+;;; ----------------------------------------------------------- frame groups
 
 (defun %frame-lines (text)
   "Split TEXT on #\\Newline into a list of lines, mirroring cl-tty-kit's own
@@ -41,7 +111,7 @@ number of lines, WIDTH the length of the longest one."
 as a SIMPLE-VECTOR where every frame has been padded to the group's own
 maximum width and height. This is what guarantees SPRITE-DIMENSIONS reports
 the same (width, height) for every frame of a variant -- see the file header
--- without requiring the hand-authored art below to be typed with pixel-exact
+-- without requiring the hand-authored art to be typed with pixel-exact
 column alignment."
   (let* ((line-lists (mapcar #'%frame-lines raw-frames))
          (height (reduce #'max line-lists :key #'length :initial-value 0))
@@ -58,58 +128,3 @@ column alignment."
                  (format nil "~{~A~^~%~}" full)))
              line-lists)
      'simple-vector)))
-
-;;; TRAIN-VARIANTS must be available while %DEFINE-TRAIN-VARIANT expands the
-;;; forms below it. The finite set lives in one macro so adding a variant
-;;; requires changing this declaration and recompiling the generated dispatch.
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmacro train-variants ()
-    "Expand to a quoted list of recognized TRAIN-VARIANT keywords.
-
-The returned list is compile-time data, not a mutable runtime registry."
-    '(quote (:normal :little :c51 :fly)))
-  (defun %known-train-variant-p (variant)
-    "Return true when VARIANT names one of the compiled train variants."
-    (case variant
-      ((:normal :little :c51 :fly) t)
-      (otherwise nil)))
-  (defun %train-frames-symbol (variant) "Return the generated frame-vector symbol for VARIANT." (ecase variant (:normal (quote +train-frames-normal+)) (:little (quote +train-frames-little+)) (:c51 (quote +train-frames-c51+)) (:fly (quote +train-frames-fly+)))))
-
-(defun %join-lines (&rest lines)
-  "Join LINES with #\\Newline between them. Each line is a complete string
-literal in its own right (rather than one literal spread across source lines
-via FORMAT's ~<newline> continuation directive), which matters here: that
-directive also strips the LEADING WHITESPACE of the continuation line, which
-would silently flatten every line below the art's intentionally indented
-smoke puffs -- exactly the class of bug NORMALIZE-FRAME-GROUP's own padding
-cannot catch, since collapsed leading spaces still produce a rectangular,
-self-consistent frame."
-  (format nil "~{~A~^~%~}" lines))
-
-(defmacro %define-train-variant (variant documentation &body frames)
-  "Define +TRAIN-FRAMES-<VARIANT>+ from FRAMES (each a list of line-string
-forms, one element per animation frame, passed to %JOIN-LINES) via
-NORMALIZE-FRAME-GROUP. VARIANT must already be a member of TRAIN-VARIANTS
--- checked here, at macroexpansion time, so a typo'd or not-yet-declared
-variant is a compile error pointing at this form rather than a run-time
-UNKNOWN-VARIANT pointing at whichever caller first hit the gap."
-  (unless (%known-train-variant-p variant)
-    (error "%DEFINE-TRAIN-VARIANT: ~S is not a member of TRAIN-VARIANTS." variant))
-  (let ((frames-name (%train-frames-symbol variant)))
-    `(defparameter ,frames-name
-       (normalize-frame-group (list ,@(mapcar (lambda (frame) `(%join-lines ,@frame)) frames)))
-       ,documentation)))
-
-(defmacro %train-frames (variant)
-  "Expand to finite CASE dispatch for TRAIN-VARIANT.
-
-The generated branch names are symbols emitted by %DEFINE-TRAIN-VARIANT, so
-there is no mutable registry to initialize or accidentally desynchronize."
-  (let ((variant-var (gensym "VARIANT")))
-    `(let ((,variant-var ,variant))
-       (case ,variant-var
-         (:normal +train-frames-normal+)
-         (:little +train-frames-little+)
-         (:c51 +train-frames-c51+)
-         (:fly +train-frames-fly+)
-         (otherwise (error 'unknown-variant :name ,variant-var))))))
