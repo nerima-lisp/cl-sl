@@ -1,308 +1,88 @@
 ;;;; src/render.lisp -- painting a WORLD onto a cl-tty-kit SCREEN.
 ;;;;
-;;;; ASDF binds the reader package for every component in the system; this
-;;;; keeps the package boundary out of SB-COVER's behavior counts.
+;;;; There is exactly one draw path, and it repaints the whole back buffer
+;;;; every frame. That is not wasteful: cl-tty-kit's RENDERER-RENDER already
+;;;; diffs the back buffer against the previous frame cell by cell and emits
+;;;; only the cells whose value changed, so a hand-written incremental
+;;;; compositor here would duplicate that work while adding erase bookkeeping
+;;;; -- state that can disagree with the screen -- for no fewer bytes written
+;;;; to the terminal.
+;;;;
+;;;; Every element is placed with cl-tty-kit:SPRITE-BLIT, which exists for
+;;;; exactly this job: one source character per screen column -- rather than
+;;;; SCREEN-WRITE-STRING's CHAR-WIDTH-aware advance, which is the wrong model
+;;;; for art already laid out on a monospaced source grid -- a caller-chosen
+;;;; transparent marker, and SCREEN-BLIT's own clipping on all four edges, so
+;;;; a locomotive at a negative X or past the right edge paints its visible
+;;;; overlap and nothing else instead of signalling.
 
-(defun %write-clipped-span (screen span x y style)
-  "Write SPAN at X/Y, clipping horizontally to SCREEN's bounds."
-  (let* ((text (cached-span-text span))
-         (origin-x (+ x (cached-span-x span)))
-         (start (max 0 (- origin-x)))
-         (end (min (length text) (- (screen-width screen) origin-x))))
-    (when (< start end)
-      (screen-write-string screen (+ origin-x start) y text
-                           :style style :start start :end end))))
+;;; There is no `(in-package #:cl-sl)' here, and adding one would break the
+;;; build gate rather than fix anything. cl-sl.asd's :around-compile hook binds
+;;; the reader package for every component of this system, so the form would be
+;;; redundant -- and SB-COVER counts it as an executable expression that no test
+;;; can ever exercise, which drops the coverage check below its 100% threshold.
+;;; The same goes for declarations: a constant belongs in a file on flake.nix's
+;;; coverage-exclude-pathnames list, which is why +SMOKE-OPAQUE-MARKER+ -- used
+;;; by %DRAW-SMOKE below -- is defined in constants.lisp rather than here. Those
+;;; excluded files may carry their own in-package.
 
-(defun %draw-cached-sprite (screen sprite x y)
-  "Apply a prepared SPRITE to SCREEN with the same clipping as SPRITE-BLIT."
-  (let ((height (screen-height screen))
-        (style (cached-sprite-style sprite)))
-    (loop for row below (cached-sprite-height sprite)
-          for screen-row = (+ y row)
-          when (and (<= 0 screen-row) (< screen-row height))
-            do (loop for span across (aref (cached-sprite-spans sprite) row)
-                     do (%write-clipped-span screen span x screen-row style))))
+(defun %rider-pose-index (x)
+  "Return which of the two rider poses is showing at column X: the pose
+switches every eight columns travelled."
+  (mod (floor (abs (floor x)) 8) 2))
+
+(defun %draw-riders (screen train x y)
+  "Draw a rider at each of TRAIN's variant mounting points, relative to the
+locomotive's top-left corner at X/Y. Riders take SPRITE-BLIT's default space
+transparency, so the locomotive shows through the gaps in the figure."
+  (let ((art (rider-art (%rider-pose-index (train-x train)))))
+    (dolist (offset (rider-offsets (train-variant train)))
+      (sprite-blit screen art (+ x (car offset)) (+ y (cdr offset))
+                   :style +person-style+)))
   screen)
 
-(defun %draw-sprite (screen cache art x y style)
-  "Draw ART from CACHE when available, retaining SPRITE-BLIT as a fallback."
-  (let ((sprite (%cached-sprite-for cache art)))
-    (if sprite
-        (progn
-          (%draw-cached-sprite screen sprite x y)
-          (%make-rendered-sprite art sprite x y))
-        (progn
-          (sprite-blit screen art x y :style style)
-          nil))))
-
-(defun %clear-rendered-sprite (screen rendered-sprite)
-  "Clear the clipped bounding rectangle occupied by RENDERED-SPRITE."
-  (when rendered-sprite
-    (let* ((sprite (rendered-sprite-sprite rendered-sprite))
-           (left (max 0 (rendered-sprite-x rendered-sprite)))
-           (top (max 0 (rendered-sprite-y rendered-sprite)))
-           (right (min (screen-width screen)
-                       (+ (rendered-sprite-x rendered-sprite)
-                          (cached-sprite-width sprite))))
-           (bottom (min (screen-height screen)
-                        (+ (rendered-sprite-y rendered-sprite)
-                           (cached-sprite-height sprite)))))
-      (when (and (< left right) (< top bottom))
-        (screen-fill-rect screen left top (- right left) (- bottom top)
-                          (make-cell :char #\Space)))))
+(defun %draw-smoke (screen world)
+  "Draw WORLD's smoke puffs oldest first, so a younger puff overlapping an
+older one wins the cell. See +SMOKE-OPAQUE-MARKER+ for why these blits are
+opaque while the locomotive's and the riders' are not."
+  (dolist (puff (reverse (world-smoke-puffs world)))
+    (sprite-blit screen
+                 (smoke-art (smoke-puff-kind puff) (smoke-puff-stage puff))
+                 (smoke-puff-x puff)
+                 (smoke-puff-y puff)
+                 :transparent +smoke-opaque-marker+
+                 :style +train-style+))
   screen)
 
-(defun %reset-render-cache-screen (cache screen)
-  "Forget dirty-region state when CACHE is used with another SCREEN."
-  (unless (and (eq screen (render-cache-screen cache))
-               (= (screen-width screen) (render-cache-screen-width cache))
-               (= (screen-height screen) (render-cache-screen-height cache)))
-    (setf (render-cache-screen cache) screen
-          (render-cache-screen-width cache) (screen-width screen)
-          (render-cache-screen-height cache) (screen-height screen)
-          (render-cache-previous-train cache) nil
-          (render-cache-previous-background cache) nil
-          (render-cache-previous-smoke cache) nil)))
-
-(defun %cached-background (world cache)
-  "Return the current cached accident sprite and its position, if any."
-  (when (world-accident-p world)
-    (let* ((person-art (person-art))
-           (person-sprite (%cached-sprite-for cache person-art))
-           (art (if (world-person-struck-p world)
-                    (splat-art)
-                    person-art))
-           (sprite (%cached-sprite-for cache art)))
-      (when (and person-sprite sprite)
-        (values art sprite
-                (world-person-x world)
-                (max 0 (- (world-height world)
-                          (cached-sprite-height person-sprite))))))))
-
-(defun %render-cache-ready-p (cache world)
-  "Return true when CACHE contains all sprites needed for WORLD."
-  (and (%cached-sprite-for cache (train-art (world-train world)))
-       (or (not (world-accident-p world))
-           (multiple-value-bind (art sprite x y) (%cached-background world cache)
-             (declare (ignore x y))
-             (and art sprite)))))
-
-(defun %draw-world-uncached (screen world cache)
-  "Render WORLD with the canonical full repaint path."
-  (when cache
-    (setf (render-cache-previous-train cache) nil
-          (render-cache-previous-background cache) nil
-          (render-cache-previous-smoke cache) nil))
-  (with-screen-batch (screen)
-    (screen-clear screen)
-    (labels ((draw-line (text x y style)
-               (when (and (stringp text)
-                          (plusp (length text))
-                          (<= 0 y)
-                          (< y (screen-height screen)))
-                 (let* ((start (max 0 (- x)))
-                        (end (min (length text)
-                                  (- (screen-width screen) x))))
-                   (when (< start end)
-                     (screen-write-string screen (+ x start) y text
-                                          :style style
-                                          :start start
-                                          :end end)))))
-             (draw-person (x y)
-               (let* ((state (mod (truncate (+ (%canonical-train-length :little)
-                                               x)
-                                            12)
-                                  2))
-                      (head (if (zerop state) "" "Help!"))
-                      (body (if (zerop state) "(O)" "\\O/")))
-                 (draw-line head x y +person-style+)
-                 (draw-line body x (1+ y) +person-style+))))
-      (let* ((train (world-train world))
-             (train-x (round (train-x train)))
-             (train-y (round (train-y train world))))
-        (%draw-sprite screen nil (train-art train)
-                      train-x train-y +train-style+)
-        (when (world-accident-p world)
-          (let* ((kind (%canonical-train-kind (train-variant train)))
-                 (py2 (if (train-fly-p train) 4 0))
-                 (py3 (if (train-fly-p train) 6 0)))
-            (case kind
-              (:logo
-               (draw-person (+ train-x 14) (+ train-y 1))
-               (draw-person (+ train-x 45) (+ train-y 1 py2))
-               (draw-person (+ train-x 53) (+ train-y 1 py2))
-               (draw-person (+ train-x 66) (+ train-y 1 py3))
-               (draw-person (+ train-x 74) (+ train-y 1 py3)))
-              (:d51
-               (draw-person (+ train-x 43) (+ train-y 2))
-               (draw-person (+ train-x 47) (+ train-y 2)))
-              (:c51
-               (draw-person (+ train-x 45) (+ train-y 3))
-               (draw-person (+ train-x 49) (+ train-y 3))))))
-        (dolist (puff (reverse (world-smoke-puffs world)))
-          (draw-line (canonical-smoke-art (smoke-puff-kind puff)
-                                           (smoke-puff-stage puff))
-                     (smoke-puff-x puff)
-                     (smoke-puff-y puff)
-                     +train-style+))))
-  screen))
-
-(defun %draw-world-cached (screen world cache)
-  "Render WORLD with the canonical repaint path."
-  (%draw-world-uncached screen world cache))
-(defun %draw-world-incremental (screen world cache)
-  "Render WORLD with the original persistent-screen compositor."
-  (labels ((draw-line (text x y style)
-             (when (and (stringp text)
-                        (plusp (length text))
-                        (<= 0 y)
-                        (< y (screen-height screen)))
-               (let* ((start (max 0 (- x)))
-                      (end (min (length text)
-                                (- (screen-width screen) x))))
-                 (when (< start end)
-                   (loop for source-index from start below end for target-x from (+ x start) do (cl-tty-kit:screen-put-cell screen target-x y (char text source-index) :style style))))))
-           (copy-puffs (puffs)
-             (mapcar (lambda (puff) (copy-structure puff)) puffs))
-           (same-puff-p (left right)
-             (and (= (smoke-puff-x left) (smoke-puff-x right))
-                  (= (smoke-puff-y left) (smoke-puff-y right))
-                  (= (smoke-puff-stage left) (smoke-puff-stage right))
-                  (= (smoke-puff-kind left) (smoke-puff-kind right))))
-           (draw-puff (puff)
-             (draw-line (canonical-smoke-art (smoke-puff-kind puff)
-                                             (smoke-puff-stage puff))
-                        (smoke-puff-x puff)
-                        (smoke-puff-y puff)
-                        +train-style+))
-           (erase-puff (puff)
-             (draw-line (canonical-smoke-erase (smoke-puff-stage puff))
-                        (smoke-puff-x puff)
-                        (smoke-puff-y puff)
-                        +train-style+))
-           (draw-engine-line (body wheels pattern row x y)
-             (draw-line
-              (cond
-                ((< row (length body))
-                 (nth row body))
-                ((< (- row (length body))
-                    (length (aref wheels pattern)))
-                 (nth (- row (length body))
-                      (aref wheels pattern)))
-                (t ""))
-              x (+ y row) +train-style+))
-           (draw-train (train)
-             (let* ((kind (%canonical-train-kind (train-variant train)))
-                    (pattern (mod (train-frame-index train) 6))
-                    (flying-p (train-fly-p train))
-                    (x (round (train-x train)))
-                    (y (round (train-y train world))))
-               (multiple-value-bind (height body wheels coal coal-x car-lines car-xs)
-                   (ecase kind
-                     (:d51 (values (if flying-p 12 11)
-                                   +d51-body-lines+ +d51-wheel-lines+
-                                   +d51-coal-lines+ 53 nil nil))
-                     (:logo (values (if flying-p 13 7)
-                                    +logo-body-lines+ +logo-wheel-lines+
-                                    +logo-coal-lines+ 21
-                                    +logo-car-lines+ (list 42 63)))
-                     (:c51 (values (if flying-p 13 12)
-                                   +c51-body-lines+ +c51-wheel-lines+
-                                   +c51-coal-lines+ 55 nil nil)))
-                 (let ((dy (if flying-p (if (eq kind :logo) 2 1) 0))
-                       (py2 (if flying-p 4 0))
-                       (py3 (if flying-p 6 0)))
-                   (loop for row below height
-                         do (draw-engine-line body wheels pattern row x y)
-                            (when (< row (length coal))
-                              (draw-line (nth row coal)
-                                         (+ x coal-x) (+ y row dy)
-                                         +train-style+))
-                            (when (and car-lines (< row (length car-lines)))
-                              (dolist (car-x car-xs)
-                                (draw-line (nth row car-lines)
-                                           (+ x car-x)
-                                           (+ y row
-                                              (if (= car-x 42) py2 py3))
-                                           +train-style+))))))))
-           (draw-person (x y)
-             (let* ((state (mod (truncate (+ (%canonical-train-length :little)
-                                             x)
-                                          12)
-                                2))
-                    (head (if (zerop state) "" "Help!"))
-                    (body (if (zerop state) "(O)" "\\O/")))
-               (draw-line head x y +person-style+)
-               (draw-line body x (1+ y) +person-style+)))
-           (draw-accident (train)
-             (let* ((kind (%canonical-train-kind (train-variant train)))
-                    (x (round (train-x train)))
-                    (y (round (train-y train world)))
-                    (py2 (if (train-fly-p train) 4 0))
-                    (py3 (if (train-fly-p train) 6 0)))
-               (case kind
-                 (:logo
-                  (draw-person (+ x 14) (+ y 1))
-                  (draw-person (+ x 45) (+ y 1 py2))
-                  (draw-person (+ x 53) (+ y 1 py2))
-                  (draw-person (+ x 66) (+ y 1 py3))
-                  (draw-person (+ x 74) (+ y 1 py3)))
-                 (:d51
-                  (draw-person (+ x 43) (+ y 2))
-                  (draw-person (+ x 47) (+ y 2)))
-                 (:c51
-                  (draw-person (+ x 45) (+ y 3))
-                  (draw-person (+ x 49) (+ y 3))))))
-           (draw-smoke-transition (previous current)
-             (let ((oldest-previous (reverse previous))
-                   (oldest-current (reverse current)))
-               (loop for old in oldest-previous
-                     for new in oldest-current
-                     do (unless (same-puff-p old new)
-                          (erase-puff old)
-                          (draw-puff new)))
-               (loop for old in (nthcdr (length oldest-current)
-                                        oldest-previous)
-                     do (erase-puff old))
-               (loop for new in (nthcdr (length oldest-previous)
-                                        oldest-current)
-                     do (draw-puff new)))))
-    (%reset-render-cache-screen cache screen)
-    (let* ((train (world-train world))
-           (background (list (world-accident-p world)
-                             (world-person-struck-p world)))
-           (initial-p (null (render-cache-previous-train cache)))
-           (background-changed-p
-             (and (render-cache-previous-background cache)
-                  (not (equal background
-                              (render-cache-previous-background cache))))))
-      (with-screen-batch (screen)
-        (when (or initial-p background-changed-p)
-          (screen-clear screen)
-          (setf (render-cache-previous-smoke cache) nil))
-        (draw-train train)
-        (when (world-accident-p world)
-          (draw-accident train))
-        (draw-smoke-transition (render-cache-previous-smoke cache)
-                               (world-smoke-puffs world)))
-      (setf (render-cache-previous-train cache) t
-            (render-cache-previous-background cache) background
-            (render-cache-previous-smoke cache)
-              (copy-puffs (world-smoke-puffs world)))
-      screen)))
-
-(defun draw-world (screen world &optional render-cache)
+(defun draw-world (screen world)
   "Paint WORLD onto SCREEN and return SCREEN.
 
-DRAW-WORLD always uses the deterministic full-repaint path. RENDER-CACHE
-may provide prepared sprite geometry, but it does not change this repaint
-contract."
-  (if (and render-cache (%render-cache-ready-p render-cache world))
-      (%draw-world-cached screen world render-cache)
-      (%draw-world-uncached screen world render-cache)))
-(defun render-frame (renderer world &optional render-cache)
-  "Draw WORLD onto the renderer back buffer and return its diff output."
-  (if (and render-cache (render-cache-p render-cache))
-      (%draw-world-incremental (renderer-screen renderer) world render-cache)
-      (draw-world (renderer-screen renderer) world render-cache))
+Clear, then the smoke, then the locomotive over it, then its riders when
+WORLD-ACCIDENT-P is on.
+
+The locomotive's ink is opaque, so it is painted after the smoke it may
+overlap; its blank padding is transparent, which is SPRITE-BLIT's default.
+Grounded, the order is invisible: every puff sits on a row above the
+locomotive's top row and the two never share a cell. Flying, the locomotive
+climbs into rows where it already left exhaust, and drawing smoke last let a
+puff punch through the boiler -- the steam dome rendered as `.**---.' instead
+of `.-----.'. Blitting the frame opaquely instead would drag a train-shaped
+hole through the trail, since NORMALIZE-FRAME-GROUP pads every frame out to
+its group's bounding box and most of that rectangle is padding. Riders come
+last because they ride on the locomotive."
+  (with-screen-batch (screen)
+    (screen-clear screen)
+    (let* ((train (world-train world))
+           (x (round (train-x train)))
+           (y (round (train-y train world))))
+      (%draw-smoke screen world)
+      (sprite-blit screen (train-art train) x y :style +train-style+)
+      (when (world-accident-p world)
+        (%draw-riders screen train x y))))
+  screen)
+
+(defun render-frame (renderer world)
+  "Draw WORLD onto RENDERER's back buffer and return RENDERER-RENDER's diff
+output for this frame."
+  (draw-world (renderer-screen renderer) world)
   (renderer-render renderer))

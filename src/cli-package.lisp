@@ -13,7 +13,16 @@
                 #:+default-height+
                 #:+default-fps+)
   (:import-from #:cl-tty-kit
-                #:terminal-size)
+                #:terminal-size
+                ;; The terminal teardown %RESTORE-TERMINAL performs from a
+                ;; signal handler. These are the same three operations
+                ;; WITH-TERMINAL-SESSION and WITH-RAW-MODE run on their own
+                ;; unwind -- which a signal does not trigger, because the
+                ;; default disposition of SIGTERM and SIGHUP ends the process
+                ;; without unwinding anything.
+                #:disable-raw-mode
+                #:ansi-show-cursor
+                #:ansi-exit-alternate-screen)
   (:import-from #:cl-cli
                 #:make-app
                 #:make-option

@@ -1,141 +1,109 @@
-;;;; src/train.lisp -- the TRAIN struct and its one pure per-tick transition.
+;;;; src/train.lisp -- the TRAIN struct's pure per-tick transition and the
+;;;; geometry derived from its current art frame.
 ;;;;
-;;;; A TRAIN tracks its own horizontal position and velocity, which animation
-;;;; frame of its VARIANT's frame table is showing, and (while -a/--accident
-;;;; is in effect) whether it is paused mid-collision with the accident
-;;;; sprite. It does no I/O and reads no wall clock -- see update-shaped
-;;;; discipline in TRAIN-ADVANCE below -- so WORLD-ADVANCE (world.lisp) can
-;;;; call it a fixed number of times and produce an exactly reproducible final
-;;;; state, the property every test in t/ relies on.
+;;;; Everything here is integer arithmetic over TRAIN-X: which wheel phase is
+;;;; showing, which row the locomotive occupies, and whether it has left the
+;;;; screen are all functions of position, not of an accumulated counter. That
+;;;; is what lets WORLD-ADVANCE (world.lisp) call TRAIN-ADVANCE a fixed number
+;;;; of times and reach an exactly reproducible state, the property every test
+;;;; in t/ relies on. No I/O, no wall clock, no floating-point trigonometry.
 
-(defun %canonical-train-kind (variant)
-  (case variant
-    ((:normal :fly) :d51)
-    (:little :logo)
-    (:c51 :c51)
-    (otherwise (error 'unknown-variant :name variant))))
+;;; There is no `(in-package #:cl-sl)' here, and adding one would break the
+;;; build gate rather than fix anything. cl-sl.asd's :around-compile hook binds
+;;; the reader package for every component of this system, so the form would be
+;;; redundant -- and SB-COVER counts it as an executable expression that no test
+;;; can ever exercise, which drops the coverage check below its 100% threshold.
+;;; Declarations, constants, and literal tables belong in a file on flake.nix's
+;;; coverage-exclude-pathnames list for the same reason; those excluded files
+;;; may carry their own in-package.
 
-(defun %canonical-train-length (variant)
-  (ecase (%canonical-train-kind variant)
-    (:d51 83)
-    (:logo 84)
-    (:c51 87)))
-
-(defun %canonical-train-height (variant)
-  (ecase (%canonical-train-kind variant)
-    (:d51 10)
-    (:logo 6)
-    (:c51 11)))
-
-(defun %canonical-frame-index (variant x)
-  (let* ((kind (%canonical-train-kind variant))
-         (value (+ (%canonical-train-length variant) (truncate x))))
-    (mod (if (eq kind :logo)
-             (truncate value 3)
-             value)
-         6)))
-
-(defun %canonical-train-funnel (variant)
-  (ecase (%canonical-train-kind variant)
-    (:d51 7)
-    (:logo 4)
-    (:c51 7)))
+(defun %frame-index-for-x (x)
+  "Return the wheel phase showing at column X: one phase per column travelled,
+cycling through the six frames of every variant's table."
+  (mod (abs (floor x)) 6))
 
 (defun make-train (&key x dx variant fly-p)
   "Create a TRAIN at X with velocity DX and animation VARIANT.
-FLY-P enables the canonical flying coordinates without changing the art
-variant. Missing keyword values use the public defaults."
+FLY-P selects the flying trajectory without changing the art variant. Missing
+keyword values use the public defaults."
   (let ((x (or x 0.0))
-        (dx (or dx +default-speed+))
+        (dx (or dx +train-speed+))
         (variant (or variant :normal))
-        (fly-p (or fly-p (eq variant :fly))))
+        (fly-p (and fly-p t)))
     (check-type x real)
     (check-type dx real)
     (unless (%known-train-variant-p variant)
       (error 'unknown-variant :name variant))
     (%make-train :x x
                  :dx dx
-                 :saved-dx dx
                  :variant variant
                  :fly-p fly-p
-                 :frame-index (%canonical-frame-index variant x)
-                 :frame-timer +frame-period+)))
+                 :frame-index (%frame-index-for-x x))))
 
 (defun train-art (train)
-  "Return TRAIN's current canonical animation frame."
-  (let ((frame-index (mod (train-frame-index train) 6)))
-    (if (train-fly-p train)
-        (%canonical-train-frame (%canonical-train-kind (train-variant train))
-                                frame-index
-                                t)
-        (aref (%train-frames (train-variant train)) frame-index))))
-
-(defun train-dimensions (train)
-  "Return (VALUES WIDTH HEIGHT) of TRAIN's current frame. Every frame of a
-given variant shares the same dimensions (see art-train.lisp's
-NORMALIZE-FRAME-GROUP), so which frame is current does not matter here."
-  (sprite-dimensions (train-art train)))
+  "Return TRAIN's current animation frame."
+  (aref (%train-frames (train-variant train))
+        (mod (train-frame-index train) 6)))
 
 (defun train-width (train)
-  (%canonical-train-length (train-variant train)))
-(defun train-height (train)
-  (%canonical-train-height (train-variant train)))
+  "Return the column width of TRAIN's current frame.
 
-(defun train-baseline-y (train world)
-  "Return the canonical grounded top row for TRAIN in WORLD."
-  (- (floor (world-height world) 2)
-     (if (eq (%canonical-train-kind (train-variant train)) :logo)
-         3
-         5)))
+Derived from the art rather than from a constant table, so the art and the
+motion cannot drift apart: NORMALIZE-FRAME-GROUP (art-train.lisp) gives every
+frame of a variant identical dimensions, so which frame is current does not
+change the answer."
+  (nth-value 0 (sprite-dimensions (train-art train))))
+
+(defun train-height (train)
+  "Return the row height of TRAIN's current frame. See TRAIN-WIDTH."
+  (nth-value 1 (sprite-dimensions (train-art train))))
+
+(defun %grounded-y (train world)
+  "Return the top row TRAIN occupies when grounded: the true vertical center
+of WORLD, clamped so a locomotive taller than the terminal starts at row 0
+rather than above it."
+  (max 0 (floor (- (world-height world) (train-height train)) 2)))
+
+(defun %fly-offset (x)
+  "Return the flying train's vertical displacement from its grounded row at
+column X: an integer triangle wave of amplitude +FLY-AMPLITUDE+ and period
++FLY-PERIOD+ columns, ranging over [-+FLY-AMPLITUDE+, ++FLY-AMPLITUDE+].
+
+The steps are deliberately not all the same length. Rounding a 16-column ramp
+onto 9 rows makes the even offsets three columns wide and the odd ones one
+column wide -- at the current constants, one full period reads
+-4 -4 -3 -2 -2 -2 -1 0 0 0 1 2 2 2 3 4 4 4 3 2 2 2 1 0 0 0 -1 -2 -2 -2 -3 -4,
+so the train dwells at -2, 0 and 2 and passes straight through -3, -1, 1 and
+3. That is the specified result of ROUND on this ramp, not a defect: the wave
+is monotone over each half period and hits both extremes, which is all
+TRAIN-Y needs."
+  (let* ((phase (mod (abs (floor x)) +fly-period+))
+         (half (/ +fly-period+ 2))
+         (ramp (if (< phase half)
+                   phase
+                   (- +fly-period+ phase))))
+    (- (round (* 2 +fly-amplitude+ ramp) half)
+       +fly-amplitude+)))
 
 (defun train-y (train world)
-  "Return TRAIN's canonical top row in WORLD."
-  (if (train-fly-p train)
-      (let* ((kind (%canonical-train-kind (train-variant train)))
-             (divisor (if (eq kind :logo) 6 7))
-             (height (%canonical-train-height (train-variant train))))
-        (+ (truncate (train-x train) divisor)
-           (world-height world)
-           (- (truncate (world-width world) divisor))
-           (- height)))
-      (train-baseline-y train world)))
+  "Return TRAIN's top row in WORLD: the vertical center when grounded, and
+that center displaced by %FLY-OFFSET -- clamped into WORLD's rows -- when
+flying."
+  (let ((grounded (%grounded-y train world)))
+    (if (train-fly-p train)
+        (max 0 (min (1- (world-height world))
+                    (+ grounded (%fly-offset (train-x train)))))
+        grounded)))
 
-(defun train-exited-p (train world)
-  "True once TRAIN has crossed the canonical left exit coordinate."
-  (declare (ignore world))
+(defun train-exited-p (train)
+  "True once TRAIN's right edge has passed the left screen edge, i.e. no
+column of it can still be on screen."
   (< (train-x train)
      (- (train-width train))))
 
-(defun %advance-frame-state (frame-index frame-timer frame-count)
-  "Return the next animation state for FRAME-COUNT frames."
-  (if (> frame-count 1)
-      (let ((next-timer (1- frame-timer)))
-        (if (plusp next-timer)
-            (values frame-index next-timer)
-            (values (mod (1+ frame-index) frame-count)
-                    +frame-period+)))
-      (values frame-index frame-timer)))
-
-(defun %train-tick-animation (train)
-  "Advance the canonical flying motion counter by one tick."
-  (when (train-fly-p train)
-    (incf (train-fly-tick train)))
-  train)
-
 (defun train-advance (train)
   "Advance TRAIN by exactly one tick, returning TRAIN."
-  (if (eq (train-collision-state train) :struck)
-      (progn
-        (when (plusp (or (train-collision-ttl train) 0))
-          (decf (train-collision-ttl train)))
-        (when (or (null (train-collision-ttl train))
-                  (<= (train-collision-ttl train) 0))
-          (setf (train-dx train) (train-saved-dx train)
-                (train-collision-state train) :done
-                (train-collision-ttl train) nil)))
-      (incf (train-x train) (train-dx train)))
+  (incf (train-x train) (train-dx train))
   (setf (train-frame-index train)
-        (%canonical-frame-index (train-variant train)
-                                (train-x train)))
-  (%train-tick-animation train)
+        (%frame-index-for-x (train-x train)))
   train)

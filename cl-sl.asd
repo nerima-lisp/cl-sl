@@ -9,25 +9,39 @@
 (defsystem "cl-sl"
   :description "An original ASCII-art steam locomotive that runs across the terminal, for SBCL."
   :long-description "A reimplementation of the classic Unix joke command `sl`: mistype `ls` as
-`sl` and instead of a shell error, an original hand-authored steam locomotive runs across the
-current terminal and exits automatically once it has scrolled off screen. Not a port or
-transcription of the classic sl.c train art -- every sprite here is original, authored for this
-repository. SBCL only."
+`sl` and instead of a shell error, a steam locomotive runs across the current terminal and
+exits automatically once it has scrolled off screen. Every locomotive sprite, the smoke
+tables, and the motion are original to this repository. SBCL only."
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.1.0"
+  :version "1.0.0"
   :homepage "https://github.com/nerima-lisp/cl-sl"
   :bug-tracker "https://github.com/nerima-lisp/cl-sl/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-sl.git")
-  :depends-on ("cl-tty-kit" "cl-concurrent-kit")
-  ;; cl-tty-kit owns the screen and realtime loop; cl-concurrent-kit prepares
-  ;; immutable sprite spans before the single screen owner starts rendering.
+  :depends-on ("cl-tty-kit")
+  ;; cl-tty-kit owns the screen, the realtime loop, and the frame diffing.
   :pathname "src"
   :serial t
-  ;; Bind the reader package for every source component.  ASDF applies this
-  ;; hook to compilation and source loading, so package transitions do not
-  ;; become artificial SB-COVER expressions in behavior-bearing files.
+  ;; Bind the reader package for every source component. ASDF applies this hook
+  ;; to compilation and source loading alike, so a component never needs an
+  ;; in-package form of its own.
+  ;;
+  ;; That is a convention, not a convenience, and it has two halves:
+  ;;
+  ;;   1. A coverage-measured source file must NOT contain `in-package'.
+  ;;   2. Declarations, constants, and literal data tables must live in a file
+  ;;      named by `coverage-exclude-pathnames' in flake.nix -- currently
+  ;;      package, conditions, constants, state, terminal, art-train-data,
+  ;;      cli-package, and cli-entry-point.
+  ;;
+  ;; Both halves exist for one reason: SB-COVER counts every such form as an
+  ;; executable expression, while none of them carries runtime behavior a test
+  ;; could exercise. Either violation puts the coverage gate below the 100%
+  ;; threshold it enforces, and the failure names the file rather than the rule,
+  ;; so it reads like a missing test. Adding `in-package' back to a measured
+  ;; file has already been done once in good faith; each of those files now
+  ;; carries a header comment saying why the form is absent.
   :around-compile (lambda (next)
                     (let ((*package* (or (find-package "CL-SL") *package*)))
                       (funcall next)))
@@ -35,12 +49,11 @@ repository. SBCL only."
                (:file "conditions")
                (:file "art-train")
                (:file "art-train-data")
+               (:file "art-access")
                (:file "constants")
                (:file "state")
                (:file "train")
                (:file "world")
-               (:file "collision")
-               (:file "render-cache")
                (:file "render")
                (:file "app")
                (:file "terminal"))
@@ -55,7 +68,7 @@ repository. SBCL only."
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.1.0"
+  :version "1.0.0"
   :homepage "https://github.com/nerima-lisp/cl-sl"
   :bug-tracker "https://github.com/nerima-lisp/cl-sl/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-sl.git")
@@ -81,7 +94,7 @@ repository. SBCL only."
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.1.0"
+  :version "1.0.0"
   :homepage "https://github.com/nerima-lisp/cl-sl"
   :bug-tracker "https://github.com/nerima-lisp/cl-sl/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-sl.git")
@@ -96,17 +109,22 @@ repository. SBCL only."
   :depends-on ("cl-sl" "cl-sl/cli" "cl-weave" "cl-tty-kit")
   :pathname "t"
   :serial t
+  ;; NOTE: this list is what a test run executes, and nothing else. A .lisp
+  ;; file under t/ that is absent from it does not run and does not report --
+  ;; the suite prints the same count and exits 0. t/suite-registration-test.lisp
+  ;; compares this list against the directory on every run for exactly that
+  ;; reason; adding a file here is not optional bookkeeping.
   :components ((:file "package")
                (:file "helpers-world")
                (:file "helpers-matchers")
+               (:file "suite-registration-test")
                (:file "art-train-test")
                (:file "train-test")
                (:file "world-test")
                (:file "resize-test")
                (:file "input-test")
-               (:file "collision-test")
-               (:file "collision-mutation-test")
                (:file "render-test")
+               (:file "frame-parity-test")
                (:file "app-test")
                (:file "cli-test"))
   :perform (test-op (op system)

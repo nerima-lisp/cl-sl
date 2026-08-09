@@ -5,28 +5,36 @@
 ;;;; the measured transition and rendering sources.
 (in-package #:cl-sl)
 
-(defparameter +frame-period+ 4
-  "Ticks between animation frame advances (smoke drift / wheel spin).")
-
-(defparameter +collision-ticks+ 8
-  "Ticks the train pauses while showing the splat frame.")
-
-(defparameter +fly-y-offsets+ #(0 -1 -2 -3 -2 -1)
-  "Vertical offsets for the :FLY train's discrete arc.")
-
 (defparameter +default-width+ 80)
 (defparameter +default-height+ 24)
 (defparameter +default-fps+ 25 "Default realtime-loop frame rate.")
 
-(defparameter +default-speed+ -2.0
-  "Legacy default retained for direct TRAIN construction compatibility.")
+(defparameter +train-speed+ -1.0
+  "The one train speed: one column per tick, leftward. MAKE-TRAIN's default DX
+and MAKE-WORLD's default :SPEED are both this value, so a train built either
+way moves at the same rate.")
 
-(defparameter +canonical-speed+ -1.0
-  "Canonical command speed: one column per tick, leftward.")
+(defparameter +fly-amplitude+ 4
+  "Peak vertical excursion, in rows, of the flying train's triangle wave.")
+
+(defparameter +fly-period+ 32
+  "Columns of travel per full up-and-down cycle of the flying train.")
 
 (defparameter +quit-characters+ (list #\q #\Q)
   "Characters that request an early quit from the realtime loop.")
 
 (defparameter +train-style+ (make-style (style-fg (named-color :bright-white))))
 (defparameter +person-style+ (make-style (style-fg (named-color :bright-yellow))))
-(defparameter +splat-style+ (make-style (style-fg (named-color :bright-red))))
+
+(defparameter +smoke-opaque-marker+ (code-char 0)
+  "The :TRANSPARENT marker used when blitting smoke: a character that cannot
+occur in a smoke glyph, which makes that blit fully opaque.
+
+Smoke is drawn opaquely on purpose. The spaces inside `(. oo .)' are part of
+the puff's shape rather than padding, and %DRAW-SMOKE's oldest-first ordering
+depends on a younger puff being able to overwrite an older one's cells.
+
+Its sole consumer is %DRAW-SMOKE in render.lisp. It is declared here anyway, for
+the reason in this file's header: render.lisp is coverage-measured, and a
+declaration placed there is an expression SB-COVER counts and no test can
+exercise.")

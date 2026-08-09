@@ -48,3 +48,9 @@ coverage.dat
 .\#*
 
 # --- Repository-specific entries below this line ---
+
+# Serena's project state and memories. Ignored globally on the maintainer's
+# machine, which is why it has never been committed; spelled out here so the
+# same holds for a contributor without that global config, and for any
+# `git add -A` in CI. The memories accumulate absolute paths.
+/.serena/

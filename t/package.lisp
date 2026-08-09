@@ -1,4 +1,6 @@
 ;;;; t/package.lisp
+(in-package #:cl-user)
+
 (defpackage #:cl-sl/test
   (:use #:cl #:cl-sl)
   ;; DESCRIBE clashes with CL:DESCRIBE, so shadow-import cl-weave's.
@@ -6,8 +8,7 @@
   (:import-from #:cl-weave
                 #:it #:it-each #:expect #:run-all #:with-soft-assertions
                 #:it-fuzz #:gen-integer #:gen-member #:gen-boolean
-                #:defmatcher #:before-each #:after-each
-                #:run-mutations #:assert-mutation-score)
+                #:defmatcher #:before-each)
   ;; Test-only cl-tty-kit primitives. CL-SL imports all of these into its own
   ;; package already (src/package.lisp) but does not re-export them as part
   ;; of its own public API -- an application does not need to forward its
@@ -15,7 +16,11 @@
   ;; directly (rather than only through DRAW-WORLD/RENDER-FRAME), or that
   ;; build KEY-EVENTs from a plain string, import them here instead.
   ;; DECODE-INPUT (a one-shot decoder) is the simplest way for a test to drive
-  ;; WORLD-APPLY-KEY-EVENT without composing raw escape sequences.
+  ;; WORLD-APPLY-KEY-EVENT without composing raw escape sequences, and
+  ;; KEY-EVENT-TYPE/KEY-EVENT-CODE let t/input-test.lisp assert that a fixture
+  ;; string really decoded to the event kind whose handling that test claims to
+  ;; exercise, rather than to nothing at all.
+  ;; SCREEN-WIDTH/SCREEN-HEIGHT back SCREEN-ROW-STRING in t/helpers-world.lisp.
   ;; RENDERER-WIDTH/RENDERER-HEIGHT let t/app-test.lisp assert %APPLY-RESIZE
   ;; actually resized the renderer, not only the world.
   (:import-from #:cl-tty-kit
@@ -24,6 +29,7 @@
                 #:renderer-width #:renderer-height
                 #:tick-loop-run
                 #:cell-char #:screen-cell
+                #:screen-width #:screen-height
                 #:key-event-type #:key-event-code)
   ;; Test-only cl-sl/cli and cl-cli primitives for t/cli-test.lisp. CL-SL/CLI
   ;; is a separate package from CL-SL by design (src/package.lisp), so its
